@@ -160,6 +160,87 @@ input:focus {
   outline-offset: 1px;
 }
 
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panel-head .panel-title {
+  margin-bottom: 0;
+}
+
+.panel-head + .inventory,
+.panel-head + .empty {
+  margin-top: 14px;
+}
+
+.refresh {
+  min-height: 30px;
+  padding: 3px 10px;
+  color: #9dd7ff;
+  border-color: #2d4b5e;
+  background: transparent;
+  font-size: 0.8rem;
+}
+
+.inventory {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.inventory th {
+  padding: 4px 8px 8px 0;
+  color: #8f8f8f;
+  font-size: 0.78rem;
+  font-weight: 400;
+  text-align: left;
+}
+
+.inventory td {
+  padding: 6px 8px 6px 0;
+  border-top: 1px solid #1e1e1e;
+  overflow-wrap: anywhere;
+}
+
+.inventory td.qty {
+  color: #c2f5d2;
+}
+
+.inventory td input {
+  width: 90px;
+  min-height: 36px;
+}
+
+.inventory td button {
+  min-height: 36px;
+  padding: 5px 12px;
+  white-space: nowrap;
+}
+
+.empty,
+.hint {
+  margin: 4px 0 0;
+  color: #8f8f8f;
+  font-size: 0.9rem;
+}
+
+.owner-tools {
+  margin-top: 20px;
+  color: #8f8f8f;
+}
+
+.owner-tools summary {
+  cursor: pointer;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+}
+
+.owner-tools .panel {
+  margin-top: 10px;
+}
+
 .status,
 .warning {
   display: flex;

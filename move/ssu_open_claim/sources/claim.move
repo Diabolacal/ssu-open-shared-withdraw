@@ -73,3 +73,36 @@ public fun stock_open(
         ctx,
     );
 }
+
+/// Any player moves items from their own owned/ephemeral inventory in this SSU
+/// into the shared open inventory, where anyone can claim them.
+/// `withdraw_by_owner<Character>` enforces sender == character wallet and that
+/// the cap is the character's own OwnerCap, so items can only leave the
+/// caller's own slot.
+public fun share_to_open(
+    storage_unit: &mut StorageUnit,
+    character: &Character,
+    owner_cap: &OwnerCap<Character>,
+    type_id: u64,
+    quantity: u32,
+    ctx: &mut TxContext,
+) {
+    assert!(quantity > 0, EInvalidQuantity);
+
+    let item = storage_unit::withdraw_by_owner<Character>(
+        storage_unit,
+        character,
+        owner_cap,
+        type_id,
+        quantity,
+        ctx,
+    );
+
+    storage_unit::deposit_to_open_inventory<ClaimAuth>(
+        storage_unit,
+        character,
+        item,
+        ClaimAuth {},
+        ctx,
+    );
+}

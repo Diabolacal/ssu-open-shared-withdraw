@@ -25,6 +25,39 @@ export function buildClaimTx(input: {
   return tx;
 }
 
+export function buildShareTx(input: {
+  storageUnitId: string;
+  characterId: string;
+  characterOwnerCapId: string;
+  typeId: string;
+  quantity: string;
+}): Transaction {
+  const tx = new Transaction();
+  const [ownerCap, receipt] = tx.moveCall({
+    target: `${WORLD_PACKAGE_ID}::character::borrow_owner_cap`,
+    typeArguments: [`${WORLD_PACKAGE_ID}::character::Character`],
+    arguments: [tx.object(input.characterId), tx.object(input.characterOwnerCapId)],
+  });
+
+  tx.moveCall({
+    target: claimTarget("share_to_open"),
+    arguments: [
+      tx.object(input.storageUnitId),
+      tx.object(input.characterId),
+      ownerCap,
+      tx.pure.u64(BigInt(input.typeId)),
+      tx.pure.u32(Number(input.quantity)),
+    ],
+  });
+
+  tx.moveCall({
+    target: `${WORLD_PACKAGE_ID}::character::return_owner_cap`,
+    typeArguments: [`${WORLD_PACKAGE_ID}::character::Character`],
+    arguments: [tx.object(input.characterId), ownerCap, receipt],
+  });
+  return tx;
+}
+
 export function buildAuthorizeTx(input: {
   storageUnitId: string;
   ownerCharacterId: string;

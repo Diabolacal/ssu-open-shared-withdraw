@@ -55,10 +55,12 @@ export function readAssembly(value: unknown, fallbackId?: string): {
 export function readCharacter(value: unknown, fallbackId?: string): {
   id?: string;
   name?: string;
+  ownerCapId?: string;
 } {
   return {
     id: firstString(value, ["id", "character_id", "characterId", "objectId"]) || fallbackId,
-    name: firstString(value, ["name"]),
+    name: findNestedString(value, ["name"]),
+    ownerCapId: findNestedString(value, ["owner_cap_id", "ownerCapId"]),
   };
 }
 

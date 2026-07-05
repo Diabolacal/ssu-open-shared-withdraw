@@ -22,6 +22,7 @@ export interface ResolvedAssembly {
 export interface ResolvedCharacter {
   id: string;
   name?: string;
+  ownerCapId?: string;
 }
 
 export interface SmartObjectState {

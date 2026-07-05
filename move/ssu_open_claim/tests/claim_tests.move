@@ -112,6 +112,108 @@ fun claim_rejects_someone_elses_character() {
     ts::end(scenario);
 }
 
+#[test]
+fun share_moves_owned_inventory_to_open_and_other_player_claims() {
+    let mut scenario = ts::begin(governor());
+    setup_world(&mut scenario);
+    let owner_character_id = create_character(&mut scenario, user_a(), CHARACTER_A_ITEM_ID);
+    let sharer_character_id = create_character(&mut scenario, user_b(), CHARACTER_B_ITEM_ID);
+    let (storage_id, nwn_id) = create_storage_unit(&mut scenario, owner_character_id);
+
+    online_storage_unit(&mut scenario, user_a(), owner_character_id, storage_id, nwn_id);
+    authorize_extension(&mut scenario, owner_character_id, storage_id);
+
+    // Player B (not the SSU owner) bridges ammo into their own owned/ephemeral
+    // slot, then shares it into the open inventory.
+    mint_ammo_to_owned(&mut scenario, storage_id, sharer_character_id, user_b());
+    share_to_open(&mut scenario, sharer_character_id, storage_id, user_b());
+
+    let sharer_owner_cap_id = character_owner_cap_id(&mut scenario, sharer_character_id);
+    ts::next_tx(&mut scenario, admin());
+    {
+        let storage_unit = ts::take_shared_by_id<StorageUnit>(&scenario, storage_id);
+        assert_eq!(
+            storage_unit::item_quantity(
+                &storage_unit,
+                storage_unit.open_storage_key(),
+                AMMO_TYPE_ID,
+            ),
+            AMMO_QUANTITY,
+        );
+        assert!(!storage_unit::contains_item(&storage_unit, sharer_owner_cap_id, AMMO_TYPE_ID));
+        ts::return_shared(storage_unit);
+    };
+
+    // Player A (a different wallet) claims the shared items into their own slot.
+    let claimer_owner_cap_id = character_owner_cap_id(&mut scenario, owner_character_id);
+    ts::next_tx(&mut scenario, user_a());
+    {
+        let mut storage_unit = ts::take_shared_by_id<StorageUnit>(&scenario, storage_id);
+        let claimer = ts::take_shared_by_id<Character>(&scenario, owner_character_id);
+        claim::claim_from_open(
+            &mut storage_unit,
+            &claimer,
+            AMMO_TYPE_ID,
+            AMMO_QUANTITY,
+            ts::ctx(&mut scenario),
+        );
+        ts::return_shared(storage_unit);
+        ts::return_shared(claimer);
+    };
+
+    ts::next_tx(&mut scenario, admin());
+    {
+        let storage_unit = ts::take_shared_by_id<StorageUnit>(&scenario, storage_id);
+        assert_eq!(
+            storage_unit::item_quantity(&storage_unit, claimer_owner_cap_id, AMMO_TYPE_ID),
+            AMMO_QUANTITY,
+        );
+        assert!(
+            !storage_unit::contains_item(
+                &storage_unit,
+                storage_unit.open_storage_key(),
+                AMMO_TYPE_ID,
+            ),
+        );
+        ts::return_shared(storage_unit);
+    };
+    ts::end(scenario);
+}
+
+#[test]
+#[expected_failure(abort_code = 1, location = ssu_open_claim::claim)]
+fun share_rejects_zero_quantity() {
+    let mut scenario = ts::begin(governor());
+    setup_world(&mut scenario);
+    let owner_character_id = create_character(&mut scenario, user_a(), CHARACTER_A_ITEM_ID);
+    let sharer_character_id = create_character(&mut scenario, user_b(), CHARACTER_B_ITEM_ID);
+    let (storage_id, nwn_id) = create_storage_unit(&mut scenario, owner_character_id);
+
+    online_storage_unit(&mut scenario, user_a(), owner_character_id, storage_id, nwn_id);
+    authorize_extension(&mut scenario, owner_character_id, storage_id);
+    mint_ammo_to_owned(&mut scenario, storage_id, sharer_character_id, user_b());
+
+    ts::next_tx(&mut scenario, user_b());
+    let mut storage_unit = ts::take_shared_by_id<StorageUnit>(&scenario, storage_id);
+    let mut character = ts::take_shared_by_id<Character>(&scenario, sharer_character_id);
+    let (owner_cap, receipt) = character.borrow_owner_cap<Character>(
+        ts::most_recent_receiving_ticket<OwnerCap<Character>>(&sharer_character_id),
+        ts::ctx(&mut scenario),
+    );
+    claim::share_to_open(
+        &mut storage_unit,
+        &character,
+        &owner_cap,
+        AMMO_TYPE_ID,
+        0,
+        ts::ctx(&mut scenario),
+    );
+    character.return_owner_cap(owner_cap, receipt);
+    ts::return_shared(storage_unit);
+    ts::return_shared(character);
+    ts::end(scenario);
+}
+
 fun setup_world(scenario: &mut ts::Scenario) {
     test_helpers::setup_world(scenario);
     test_helpers::configure_assembly_energy(scenario);
@@ -294,6 +396,56 @@ fun stock_open(scenario: &mut ts::Scenario, character_id: ID, storage_id: ID) {
         ts::ctx(scenario),
     );
     claim::stock_open(
+        &mut storage_unit,
+        &character,
+        &owner_cap,
+        AMMO_TYPE_ID,
+        AMMO_QUANTITY,
+        ts::ctx(scenario),
+    );
+    character.return_owner_cap(owner_cap, receipt);
+    ts::return_shared(storage_unit);
+    ts::return_shared(character);
+}
+
+/// Bridges ammo into the character's own owned/ephemeral inventory in the SSU
+/// (keyed by the character's OwnerCap id), as the in-game deposit does.
+fun mint_ammo_to_owned(
+    scenario: &mut ts::Scenario,
+    storage_id: ID,
+    character_id: ID,
+    user: address,
+) {
+    ts::next_tx(scenario, user);
+    let mut character = ts::take_shared_by_id<Character>(scenario, character_id);
+    let (owner_cap, receipt) = character.borrow_owner_cap<Character>(
+        ts::most_recent_receiving_ticket<OwnerCap<Character>>(&character_id),
+        ts::ctx(scenario),
+    );
+    let mut storage_unit = ts::take_shared_by_id<StorageUnit>(scenario, storage_id);
+    storage_unit.game_item_to_chain_inventory_test<Character>(
+        &character,
+        &owner_cap,
+        AMMO_ITEM_ID,
+        AMMO_TYPE_ID,
+        AMMO_VOLUME,
+        AMMO_QUANTITY,
+        ts::ctx(scenario),
+    );
+    character.return_owner_cap(owner_cap, receipt);
+    ts::return_shared(character);
+    ts::return_shared(storage_unit);
+}
+
+fun share_to_open(scenario: &mut ts::Scenario, character_id: ID, storage_id: ID, user: address) {
+    ts::next_tx(scenario, user);
+    let mut storage_unit = ts::take_shared_by_id<StorageUnit>(scenario, storage_id);
+    let mut character = ts::take_shared_by_id<Character>(scenario, character_id);
+    let (owner_cap, receipt) = character.borrow_owner_cap<Character>(
+        ts::most_recent_receiving_ticket<OwnerCap<Character>>(&character_id),
+        ts::ctx(scenario),
+    );
+    claim::share_to_open(
         &mut storage_unit,
         &character,
         &owner_cap,

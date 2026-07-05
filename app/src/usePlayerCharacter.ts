@@ -48,7 +48,11 @@ export function usePlayerCharacter(
         if (!cancelled) {
           setState({
             loading: false,
-            character: { id: character.id, name: character.name },
+            character: {
+              id: character.id,
+              name: character.name,
+              ownerCapId: character.ownerCapId,
+            },
           });
         }
       } catch (error) {
