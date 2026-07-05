@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.wrangler/
+.env
+.env.local
+.env.*.local
+app/chrome-debug/
+app/preview*.log
+app/preview*.png
+app/remote-smoke*.png
+move/ssu_open_claim/build/

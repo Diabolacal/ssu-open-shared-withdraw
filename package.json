@@ -1,0 +1,17 @@
+{
+  "name": "ssu-open-shared-withdraw",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm --dir app build",
+    "dev": "pnpm --dir app dev",
+    "preview": "pnpm --dir app preview",
+    "lint": "pnpm --dir app lint",
+    "move:build": "sui move build --path move/ssu_open_claim",
+    "move:test": "sui move test --path move/ssu_open_claim",
+    "check": "pnpm build && pnpm move:build && pnpm move:test"
+  },
+  "packageManager": "pnpm@10.17.0"
+}
+

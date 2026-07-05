@@ -1,0 +1,209 @@
+:root {
+  color: #f2f2f2;
+  background: #050505;
+  font-family: "Consolas", "Lucida Console", monospace;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: #050505;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.app-shell {
+  width: min(760px, calc(100vw - 24px));
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 20px 0 28px;
+}
+
+header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #343434;
+}
+
+h1,
+p {
+  margin: 0;
+}
+
+h1 {
+  max-width: 520px;
+  overflow-wrap: anywhere;
+  font-size: clamp(1.4rem, 3vw, 2.25rem);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.eyebrow {
+  margin-bottom: 4px;
+  color: #9dd7ff;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+}
+
+button {
+  min-height: 42px;
+  border: 1px solid #f2f2f2;
+  border-radius: 4px;
+  padding: 9px 13px;
+  color: #050505;
+  background: #f2f2f2;
+  cursor: pointer;
+}
+
+button:disabled {
+  color: #777;
+  border-color: #333;
+  background: #171717;
+  cursor: not-allowed;
+}
+
+.wallet-button {
+  flex: 0 0 auto;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin: 18px 0;
+  border: 1px solid #2a2a2a;
+  background: #2a2a2a;
+}
+
+.facts div {
+  min-width: 0;
+  padding: 10px;
+  background: #0d0d0d;
+}
+
+.facts span {
+  display: block;
+  margin-bottom: 2px;
+  color: #8f8f8f;
+  font-size: 0.78rem;
+}
+
+.facts strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 0.9rem;
+}
+
+.panel {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #2d2d2d;
+  border-radius: 6px;
+  background: #0b0b0b;
+}
+
+.panel-title {
+  margin-bottom: 14px;
+  color: #9dd7ff;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+form {
+  display: grid;
+  gap: 12px;
+}
+
+.owner-panel {
+  display: grid;
+  gap: 18px;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+}
+
+label span {
+  color: #b8b8b8;
+  font-size: 0.85rem;
+}
+
+input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #383838;
+  border-radius: 4px;
+  padding: 9px 10px;
+  color: #f2f2f2;
+  background: #050505;
+}
+
+input:focus {
+  outline: 2px solid #9dd7ff;
+  outline-offset: 1px;
+}
+
+.status,
+.warning {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid #343434;
+  border-radius: 4px;
+  color: #dcdcdc;
+  background: #080808;
+  overflow-wrap: anywhere;
+}
+
+.status-failed,
+.warning {
+  color: #ffb7b7;
+  border-color: #6b2a2a;
+}
+
+.status-done,
+.status-submitted {
+  color: #c2f5d2;
+  border-color: #2b6840;
+}
+
+@media (max-width: 700px) {
+  header {
+    flex-direction: column;
+  }
+
+  .wallet-button {
+    width: 100%;
+    max-width: none;
+  }
+
+  .facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .facts {
+    grid-template-columns: 1fr;
+  }
+}
+

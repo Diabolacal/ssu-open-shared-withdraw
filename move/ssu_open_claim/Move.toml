@@ -1,0 +1,10 @@
+[package]
+name = "ssu_open_claim"
+edition = "2024"
+
+[dependencies]
+world = { local = "../../../sui-playground/vendor/world-contracts/contracts/world" }
+
+[environments]
+testnet_stillness = "4c78adac"
+
