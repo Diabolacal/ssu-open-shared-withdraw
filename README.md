@@ -1,88 +1,126 @@
 # SSU Open Shared Withdraw
 
-A minimal EVE Frontier Smart Storage Unit dApp for a **shared open shelf**:
-any player can put items from their own slot in the SSU into the shared open
-inventory, and any player can take items out of it into their own slot. The
-game authenticates players with their wallet; nobody is gated.
+A minimal EVE Frontier Smart Storage Unit dApp for a **shared open shelf**,
+built to look and feel like the game's own storage interface. The design
+principle: *the storage unit's main hangar IS the shared shelf.*
 
-## What is included
+- **Owner**: drags items in and out of the unit in game, exactly as normal.
+  Zero dApp interaction to stock or reclaim. One-time "Enable shared access"
+  click authorizes the extension.
+- **Anyone else**: sees everything in the unit listed in the behavior panel
+  (NAME / AMOUNT / ID, like the game's default view). Click a row → quantity
+  stepper → **Take** → the items land in their own slot ("STORAGE UNIT" panel
+  in game) → drag them into their inventory.
+- **Depositing**: drag items into the STORAGE UNIT panel in game (they go to
+  your own slot), then press **Share** in the dApp to move them onto the
+  shelf.
 
-- `move/ssu_open_claim`: Move extension package with `ClaimAuth`, owner
-  authorization, and three flows:
-  - `share_to_open`: any player moves items from their own owned/ephemeral
-    slot in the SSU into the shared open inventory.
-  - `claim_from_open`: any player takes items from the shared open inventory
-    into their own owned/ephemeral slot.
-  - `stock_open`: the owner moves items from the SSU main hangar into the
-    shared open inventory.
-- `app`: Vite/React dApp using `@evefrontier/dapp-kit`. Black-and-white
-  interface that lists the shared inventory (with player-facing item names)
-  with a **Take** button per row, and the player's own items in the SSU with a
-  **Put in** button per row.
-- `scripts`: reserved for operator CLI helpers once live object IDs are known.
+Live deployment: <https://ssu-open-shared-withdraw.pages.dev>
+(`?demo=1` renders canned data with simulated transactions — no wallet or
+chain access needed; useful for previews and screenshots.)
 
-The implementation is pinned to the local `world-contracts` source in
-`C:/dev/sui-playground/vendor/world-contracts` at `d1929fad...` (v0.0.24).
+![At rest](docs/screenshots/shot-demo-rest.png)
 
-## How the app reads data
+## How it works on chain
 
-- Shared inventory contents: the open inventory dynamic field on the
-  `StorageUnit`, keyed by `blake2b256(bcs(storage_unit_id) ++ "open_inventory")`
-  (mirrors `world::storage_unit::open_storage_key_from_id`), read via the Sui
-  GraphQL endpoint.
-- The player's own slot: the dynamic field keyed by their character's
-  `owner_cap_id`.
-- Item names: `https://world-api-stillness.live.pub.evefrontier.com/v2/types/{type_id}`
-  (override with `VITE_WORLD_API_HOST` on a new cycle). Note the dapp-kit
-  0.1.9 `getDatahubGameInfo` host (`...live.tech...`) no longer resolves.
+`move/ssu_open_claim` publishes a `ClaimAuth` extension witness. Once the
+owner authorizes it (`storage_unit::authorize_extension`), the module exposes:
 
-## Current testnet package
+| Function | Who signs | What it does |
+|---|---|---|
+| `take(su, character, type_id, qty)` | any character | main hangar → caller's owned slot (`withdraw_item<ClaimAuth>` + `deposit_to_owned<ClaimAuth>`; sender must own the character) |
+| `put(su, character, cap, type_id, qty)` | any character | caller's owned slot → main hangar (`withdraw_by_owner<Character>` + `deposit_item<ClaimAuth>`) |
+| `authorize(su, owner_cap)` | unit owner | enables shared access (single extension slot: replaces any other dApp's witness) |
+| `claim_from_open` / `stock_open` / `share_to_open` | — | v2 legacy (open-inventory shelf); kept for upgrade compatibility, and the app still drains open-inventory leftovers on take |
 
-- Environment: `testnet_stillness`
-- World package: `0x8b8a46ed766fa1358ce7c5c51f6a164b13d627a63e45343f69ed0ba0446c1aa1`
-- Claim package v2 (includes `share_to_open`):
-  `0x1c8593d88b32b8fb8f876ce97f70254a42dd3da570ed50dcb14836723089650c`
-- Original package id (v1): `0x4defff877661097a0fdfac67a87dc6e23f37b1664cff81bb166037a34930f610`
+Key world-contract facts this relies on (v0.0.24, `testnet_stillness`):
+
+- An authorized extension may deposit/withdraw the **main** inventory with
+  just the witness — no OwnerCap. That is what lets the main hangar be the
+  shelf.
+- `deposit_to_owned` lazily creates the per-character slot; the game shows
+  that slot to its owner in the STORAGE UNIT panel and lets them drag items
+  out (burn to game).
+- A StorageUnit has **one** extension slot (`swap_or_fill`): authorizing this
+  dApp replaces e.g. Trinary Exchange on that unit, and vice versa. The app
+  warns the owner before replacing a foreign extension. Never call
+  `freeze_extension_config` — it is one-way.
+- Volumes/capacities on chain are m³ × 100; each bucket carries its own
+  `used_capacity` / `max_capacity`, which the app renders as the game-style
+  capacity bar.
+
+## Current testnet deployment
+
+- Environment: `testnet_stillness`, world package
+  `0x8b8a46ed766fa1358ce7c5c51f6a164b13d627a63e45343f69ed0ba0446c1aa1`
+- Claim package **v3** (adds `take` / `put`):
+  `0x37bf31ff7ce1e5ddc91b038153f0f3488ca4ab311a0d972a305c9f9bcccc46e3`
+- Original id (v1, the witness's defining id — never changes):
+  `0x4defff877661097a0fdfac67a87dc6e23f37b1664cff81bb166037a34930f610`
 - UpgradeCap: `0x62e423dee9a9247248489e8ff61aba08578fa24f3ee2e6427844f7a232095f05`
+  (held by the operator CLI address)
 
-Future upgrades: `sui client upgrade move/ssu_open_claim`. Upgrades keep the
-`ClaimAuth` witness identity (defining package ID), so SSUs that already
-authorized the extension keep working without re-authorization. After
-upgrading, set `VITE_CLAIM_PACKAGE_ID` in `app/.env.local` and
-`app/.env.production` to the new `published-at` address recorded in
-`move/ssu_open_claim/Published.toml`, then rebuild/redeploy the app.
+Upgrades: `sui client upgrade move/ssu_open_claim` (CLI ≥ the network's
+protocol version; `suiup install sui@testnet` to refresh), then copy the new
+`published-at` from `move/ssu_open_claim/Published.toml` into
+`VITE_CLAIM_PACKAGE_ID` and redeploy the app. Authorized units keep working
+without re-authorization (witness identity is anchored to v1).
 
-## Local verification
+## App
+
+Vite + React + `@evefrontier/dapp-kit` in `app/`. Reads go through the public
+Sui GraphQL endpoint (paginated dynamic-field walk in `src/unitState.ts`);
+item names come from the world API (`/v2/types/{id}`).
 
 ```powershell
 pnpm install
-pnpm build
-sui move build --path move/ssu_open_claim
+pnpm --dir app build          # tsc + vite build
 sui move test --path move/ssu_open_claim
+npx wrangler pages deploy dist --project-name ssu-open-shared-withdraw --branch main  # from app/
 ```
 
-## Configure the dApp
+URL parameters (all optional, first match wins for the unit):
 
-Copy `app/.env.example` to `app/.env.local` and set or confirm:
+- `storageUnitId` / `objectId` / `assemblyId` / `ssu` — Sui object id of the
+  unit (bake this into the URL you set on the unit).
+- `itemId` + `tenant` — appended automatically by the in-game browser; the
+  dapp-kit resolves them to the object id.
+- `characterId` — manual override for local testing.
+- `demo=1` — canned data, simulated transactions.
 
-- `VITE_CLAIM_PACKAGE_ID`: package ID after publishing/upgrading
-  `ssu_open_claim`.
-- `VITE_WORLD_PACKAGE_ID`: world package for the target tenant. The default is
-  `testnet_stillness`.
-- `VITE_WORLD_API_HOST` (optional): world API host for item-name lookups.
+Set the unit's dApp URL (in game: F → Edit unit → dApp URL, or on chain via
+`storage_unit::update_metadata_url`, owner-signed) to:
 
-The in-game SSU URL should point at the deployed app. The Base dApp opens it
-with `?tenant=<tenant>&itemId=<itemId>`. For local smoke tests, the app also
-accepts `?storageUnitId=<object-id>&characterId=<character-id>`.
+```
+https://ssu-open-shared-withdraw.pages.dev/?storageUnitId=<unit object id>
+```
 
-## Publish and owner setup
+## Owner setup
 
-1. Publish (or upgrade) the Move package on `testnet_stillness`.
-2. Set `VITE_CLAIM_PACKAGE_ID` to the published package ID and deploy the app.
-3. Open the app as the SSU owner and use the owner panel (collapsed under
-   "Owner setup") to authorize the extension.
-4. Share the SSU URL. Players connect their wallet, deposit items into the SSU
-   in game (their own slot), then use **Put in** to share them and **Take** to
-   claim whatever anyone has shared.
+1. Open the dApp on the unit (in game, or in a browser with EVE Vault and
+   `?storageUnitId=`).
+2. Connect the owner wallet → the banner offers **Enable shared access**
+   (one transaction; the unit's OwnerCap id is read from the unit object).
+3. Drag stock into the unit in game. Done — visitors can take, and anything
+   they share lands in the main hangar where you see it natively.
 
-Keep prototype SSUs unfrozen so the extension can be upgraded or revoked.
+## Screenshots
+
+| | |
+|---|---|
+| ![Row controls](docs/screenshots/shot-demo-controls.png) | ![After take](docs/screenshots/shot-demo-taken.png) |
+
+`docs/screenshots/shot-prod-real.png` shows the deployed app reading a live
+third-party unit (read-only, foreign extension notice).
+
+## Still to verify in game (needs a real character + owned unit)
+
+- First-visit wallet connect inside the in-game browser (the client wallet
+  registers via Wallet Standard; dapp-kit 0.1.9 lists "EVE Frontier Client
+  Wallet" as supported).
+- Whether take/put transactions prompt for a signature in game and whether
+  the character wallet holds gas (custom extension calls are NOT covered by
+  the sponsored-transaction feature, which only supports CCP's canned
+  actions).
+- That the game's STORAGE UNIT panel refreshes the visitor's slot promptly
+  after a take.

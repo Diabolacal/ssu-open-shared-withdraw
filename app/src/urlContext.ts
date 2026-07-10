@@ -3,6 +3,8 @@ export interface UrlContext {
   itemId?: string;
   storageUnitId?: string;
   characterId?: string;
+  /** Render canned data and simulate transactions; no chain access. */
+  demo: boolean;
 }
 
 export function readUrlContext(): UrlContext {
@@ -14,8 +16,9 @@ export function readUrlContext(): UrlContext {
       params.get("storageUnitId") ||
       params.get("objectId") ||
       params.get("assemblyId") ||
+      params.get("ssu") ||
       undefined,
     characterId: params.get("characterId") || undefined,
+    demo: params.get("demo") === "1",
   };
 }
-

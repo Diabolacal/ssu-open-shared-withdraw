@@ -9,6 +9,13 @@ const WORLD_API_HOST =
 const nameCache = new Map<number, string>();
 const pending = new Map<number, Promise<string>>();
 
+/** Preload known names (demo mode) so no network lookups happen. */
+export function primeTypeNames(names: Record<number, string>): void {
+  for (const [typeId, name] of Object.entries(names)) {
+    nameCache.set(Number(typeId), name);
+  }
+}
+
 async function resolveTypeName(typeId: number): Promise<string> {
   const cached = nameCache.get(typeId);
   if (cached) return cached;

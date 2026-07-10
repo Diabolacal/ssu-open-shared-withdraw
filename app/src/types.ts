@@ -12,13 +12,6 @@ export interface StatusState {
   digest?: string;
 }
 
-export interface ResolvedAssembly {
-  id: string;
-  name?: string;
-  state?: string;
-  ownerCapId?: string;
-}
-
 export interface ResolvedCharacter {
   id: string;
   name?: string;
@@ -37,4 +30,3 @@ export interface DAppKitSigner {
   signAndExecute?: (input: { transaction: unknown }) => Promise<{ digest?: string }>;
   signAndExecuteTransaction?: (input: { transaction: unknown }) => Promise<{ digest?: string }>;
 }
-

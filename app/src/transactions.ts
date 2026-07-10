@@ -6,31 +6,51 @@ function claimTarget(functionName: string): string {
   return `${CLAIM_PACKAGE_ID}::${CLAIM_MODULE}::${functionName}`;
 }
 
-export function buildClaimTx(input: {
+/**
+ * Take items from the shared shelf into the caller's own slot. The shelf is
+ * the main hangar; `openQuantity` drains any leftovers that older versions of
+ * this dApp parked in the open inventory, in the same transaction.
+ */
+export function buildTakeTx(input: {
   storageUnitId: string;
   characterId: string;
   typeId: string;
-  quantity: string;
+  mainQuantity: number;
+  openQuantity: number;
 }): Transaction {
   const tx = new Transaction();
-  tx.moveCall({
-    target: claimTarget("claim_from_open"),
-    arguments: [
-      tx.object(input.storageUnitId),
-      tx.object(input.characterId),
-      tx.pure.u64(BigInt(input.typeId)),
-      tx.pure.u32(Number(input.quantity)),
-    ],
-  });
+  if (input.mainQuantity > 0) {
+    tx.moveCall({
+      target: claimTarget("take"),
+      arguments: [
+        tx.object(input.storageUnitId),
+        tx.object(input.characterId),
+        tx.pure.u64(BigInt(input.typeId)),
+        tx.pure.u32(input.mainQuantity),
+      ],
+    });
+  }
+  if (input.openQuantity > 0) {
+    tx.moveCall({
+      target: claimTarget("claim_from_open"),
+      arguments: [
+        tx.object(input.storageUnitId),
+        tx.object(input.characterId),
+        tx.pure.u64(BigInt(input.typeId)),
+        tx.pure.u32(input.openQuantity),
+      ],
+    });
+  }
   return tx;
 }
 
-export function buildShareTx(input: {
+/** Move items from the caller's own slot onto the shared shelf (main hangar). */
+export function buildPutTx(input: {
   storageUnitId: string;
   characterId: string;
   characterOwnerCapId: string;
   typeId: string;
-  quantity: string;
+  quantity: number;
 }): Transaction {
   const tx = new Transaction();
   const [ownerCap, receipt] = tx.moveCall({
@@ -40,13 +60,13 @@ export function buildShareTx(input: {
   });
 
   tx.moveCall({
-    target: claimTarget("share_to_open"),
+    target: claimTarget("put"),
     arguments: [
       tx.object(input.storageUnitId),
       tx.object(input.characterId),
       ownerCap,
       tx.pure.u64(BigInt(input.typeId)),
-      tx.pure.u32(Number(input.quantity)),
+      tx.pure.u32(input.quantity),
     ],
   });
 
@@ -58,6 +78,7 @@ export function buildShareTx(input: {
   return tx;
 }
 
+/** Owner enables shared access by authorizing the ClaimAuth extension. */
 export function buildAuthorizeTx(input: {
   storageUnitId: string;
   ownerCharacterId: string;
@@ -83,39 +104,6 @@ export function buildAuthorizeTx(input: {
   return tx;
 }
 
-export function buildStockTx(input: {
-  storageUnitId: string;
-  ownerCharacterId: string;
-  ownerCapId: string;
-  typeId: string;
-  quantity: string;
-}): Transaction {
-  const tx = new Transaction();
-  const [ownerCap, receipt] = tx.moveCall({
-    target: `${WORLD_PACKAGE_ID}::character::borrow_owner_cap`,
-    typeArguments: [`${WORLD_PACKAGE_ID}::storage_unit::StorageUnit`],
-    arguments: [tx.object(input.ownerCharacterId), tx.object(input.ownerCapId)],
-  });
-
-  tx.moveCall({
-    target: claimTarget("stock_open"),
-    arguments: [
-      tx.object(input.storageUnitId),
-      tx.object(input.ownerCharacterId),
-      ownerCap,
-      tx.pure.u64(BigInt(input.typeId)),
-      tx.pure.u32(Number(input.quantity)),
-    ],
-  });
-
-  tx.moveCall({
-    target: `${WORLD_PACKAGE_ID}::character::return_owner_cap`,
-    typeArguments: [`${WORLD_PACKAGE_ID}::storage_unit::StorageUnit`],
-    arguments: [tx.object(input.ownerCharacterId), ownerCap, receipt],
-  });
-  return tx;
-}
-
 export async function signAndExecute(
   signer: DAppKitSigner,
   transaction: Transaction,
@@ -127,4 +115,3 @@ export async function signAndExecute(
   if (!result.digest) throw new Error("Transaction submitted without a digest.");
   return result.digest;
 }
-
