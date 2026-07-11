@@ -7,6 +7,12 @@ export interface UrlContext {
   demo: boolean;
 }
 
+/** ef-map.com/storage/0x<unit id> — the id rides in the path. */
+function unitIdFromPath(pathname: string): string | undefined {
+  const match = pathname.match(/\/storage\/(0x[0-9a-fA-F]{40,64})\/?$/);
+  return match?.[1];
+}
+
 export function readUrlContext(): UrlContext {
   const params = new URLSearchParams(window.location.search);
   return {
@@ -17,6 +23,7 @@ export function readUrlContext(): UrlContext {
       params.get("objectId") ||
       params.get("assemblyId") ||
       params.get("ssu") ||
+      unitIdFromPath(window.location.pathname) ||
       undefined,
     characterId: params.get("characterId") || undefined,
     demo: params.get("demo") === "1",
