@@ -61,6 +61,19 @@ function formatM3(units: number): string {
   });
 }
 
+// The in-game browser sometimes reopens the dApp without its query string;
+// remembering the last unit gives players a one-click way back in.
+const LAST_UNIT_KEY = "ssu-shared:last-unit";
+
+function readLastUnit(): { id?: string; name?: string } | undefined {
+  try {
+    const raw = localStorage.getItem(LAST_UNIT_KEY);
+    return raw ? (JSON.parse(raw) as { id?: string; name?: string }) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function App() {
   const urlContext = useMemo(readUrlContext, []);
   const demo = urlContext.demo;
@@ -71,7 +84,9 @@ function App() {
   const account = useCurrentAccount();
   const dAppKit = useDAppKit() as DAppKitSigner;
 
-  const unitId = useUnitId(urlContext, smartObject);
+  const [fallbackUnitId, setFallbackUnitId] = useState<string>();
+  const unitId = useUnitId(urlContext, smartObject) || fallbackUnitId;
+  const lastUnit = useMemo(readLastUnit, []);
 
   const resolvedCharacter = usePlayerCharacter(
     demo ? undefined : account?.address,
@@ -265,6 +280,19 @@ function App() {
   // Clean up the status timer on unmount.
   useEffect(() => () => window.clearTimeout(statusTimer.current), []);
 
+  // Remember the last unit this browser successfully opened.
+  useEffect(() => {
+    if (!unit?.id || demo) return;
+    try {
+      localStorage.setItem(
+        LAST_UNIT_KEY,
+        JSON.stringify({ id: unit.id, name: unit.name || "" }),
+      );
+    } catch {
+      // Storage unavailable; recovery just won't be offered.
+    }
+  }, [unit?.id, unit?.name, demo]);
+
   const shelfCapacity = state?.main;
 
   return (
@@ -322,8 +350,19 @@ function App() {
 
       {!unitId && !demo && (
         <div className="notice">
-          No storage unit in the URL. Open this dApp from the unit in game, or
-          pass ?storageUnitId=0x…
+          <p>
+            No storage unit in the URL. Open this dApp from the unit in game,
+            or pass ?storageUnitId=0x…
+          </p>
+          {lastUnit?.id && (
+            <button
+              type="button"
+              className="action wide"
+              onClick={() => setFallbackUnitId(lastUnit.id)}
+            >
+              {`Open last unit${lastUnit.name ? ` — ${lastUnit.name}` : ""}`}
+            </button>
+          )}
         </div>
       )}
       {error && <div className="notice warn-text">{error}</div>}

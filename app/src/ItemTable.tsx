@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export interface DisplayEntry {
   typeId: number;
@@ -32,6 +32,27 @@ export function ItemTable({
 }: ItemTableProps) {
   const [selected, setSelected] = useState<number>();
   const [amount, setAmount] = useState("");
+  const tableRef = useRef<HTMLDivElement>(null);
+
+  // Clicking anywhere outside the table, or pressing Escape, closes the
+  // open row — matching the "click away to dismiss" instinct.
+  useEffect(() => {
+    if (selected === undefined) return;
+    function onPointerDown(event: MouseEvent) {
+      if (!tableRef.current?.contains(event.target as Node)) {
+        setSelected(undefined);
+      }
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setSelected(undefined);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [selected]);
 
   if (entries.length === 0) {
     return <p className="empty">{emptyMessage}</p>;
@@ -54,7 +75,7 @@ export function ItemTable({
   }
 
   return (
-    <div className="table" role="table">
+    <div className="table" role="table" ref={tableRef}>
       <div className="table-head" role="row">
         <span>Name</span>
         <span>Amount</span>
@@ -122,7 +143,11 @@ export function ItemTable({
                   type="button"
                   className="action"
                   disabled={busy || !valid}
-                  onClick={() => action.onAction(entry.typeId, parsed)}
+                  onClick={() => {
+                    // Close the row as the action fires; reselect to repeat.
+                    setSelected(undefined);
+                    action.onAction(entry.typeId, parsed);
+                  }}
                 >
                   {action.label}
                 </button>
