@@ -113,14 +113,22 @@ https://ssu-open-shared-withdraw.pages.dev/?storageUnitId=<unit object id>
 `docs/screenshots/shot-prod-real.png` shows the deployed app reading a live
 third-party unit (read-only, foreign extension notice).
 
-## Still to verify in game (needs a real character + owned unit)
+## Verified in game so far (2026-07-11 smoke test)
 
-- First-visit wallet connect inside the in-game browser (the client wallet
-  registers via Wallet Standard; dapp-kit 0.1.9 lists "EVE Frontier Client
-  Wallet" as supported).
-- Whether take/put transactions prompt for a signature in game and whether
-  the character wallet holds gas (custom extension calls are NOT covered by
-  the sponsored-transaction feature, which only supports CCP's canned
-  actions).
+- The dApp loads in the BEHAVIOR panel and the in-game wallet connects
+  (auto-reconnects on reopen).
+- The wallet may carry PlayerProfiles from retired cycles; the character
+  lookup filters by the current world package (src/usePlayerCharacter.ts).
+- `?itemId=&tenant=` resolution is done in-app (src/useUnitId.ts +
+  `resolveItemIdToObjectId`), validated against a live unit. The dapp-kit's
+  own resolver additionally needs `VITE_EVE_WORLD_PACKAGE_ID` set — it
+  throws without it (that was the original in-game failure).
+
+## Still to verify in game
+
+- Whether take/put/authorize prompt for a signature in game (custom
+  extension calls are NOT covered by the sponsored-transaction feature,
+  which only supports CCP's canned actions — the wallet pays gas).
 - That the game's STORAGE UNIT panel refreshes the visitor's slot promptly
   after a take.
+- The full visitor flow (take + share) with a second character.

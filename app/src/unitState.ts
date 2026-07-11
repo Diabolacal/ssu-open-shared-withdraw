@@ -1,6 +1,7 @@
 import { blake2b } from "@noble/hashes/blake2.js";
-import { normalizeSuiAddress } from "@mysten/sui/utils";
-import { SUI_GRAPHQL_URL } from "./config";
+import { bcs } from "@mysten/sui/bcs";
+import { deriveObjectID, normalizeSuiAddress } from "@mysten/sui/utils";
+import { SUI_GRAPHQL_URL, WORLD_PACKAGE_ID } from "./config";
 import { asRecord } from "./objectReaders";
 
 export interface InventoryEntry {
@@ -66,7 +67,7 @@ export function openStorageKey(storageUnitId: string): string {
   return normalizeSuiAddress(`0x${bytesToHex(digest)}`);
 }
 
-async function gql(query: string, variables: Record<string, unknown>) {
+export async function gql(query: string, variables: Record<string, unknown>) {
   const response = await fetch(SUI_GRAPHQL_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -99,16 +100,69 @@ query UnitWithFields($id: SuiAddress!, $after: String) {
   }
 }`;
 
+// OwnerCaps are transferred to the character OBJECT (transfer-to-object),
+// which this schema reports as AddressOwner with the character id as address.
 const CAP_OWNER_QUERY = `
 query CapOwner($id: SuiAddress!) {
   object(address: $id) {
     owner {
       __typename
-      ... on Parent { parent { address } }
-      ... on AddressOwner { owner { address } }
+      ... on AddressOwner { address { address } }
     }
   }
 }`;
+
+// Known Stillness cycle-6 registry; used if the type query ever comes back empty.
+const OBJECT_REGISTRY_FALLBACK =
+  "0xf6aed9361acc0d7021672b653ebe9dae45d88e11fecef01cc5434c8f60ae764f";
+
+const REGISTRY_QUERY = `
+query Registry($type: String!) {
+  objects(filter: { type: $type } first: 1) {
+    nodes { address }
+  }
+}`;
+
+let registryAddress: string | undefined;
+
+async function getRegistryAddress(): Promise<string> {
+  if (registryAddress) return registryAddress;
+  try {
+    const data = await gql(REGISTRY_QUERY, {
+      type: `${WORLD_PACKAGE_ID}::object_registry::ObjectRegistry`,
+    });
+    const nodes = asRecord(asRecord(data?.objects))?.nodes;
+    const first = Array.isArray(nodes) ? asRecord(nodes[0]) : undefined;
+    registryAddress =
+      typeof first?.address === "string"
+        ? first.address
+        : OBJECT_REGISTRY_FALLBACK;
+  } catch {
+    registryAddress = OBJECT_REGISTRY_FALLBACK;
+  }
+  return registryAddress;
+}
+
+/**
+ * The in-game browser passes ?itemId=<numeric in-game id>&tenant=<tenant>.
+ * The matching Sui object id is a pure derivation:
+ * deriveObjectID(registry, TenantItemId type, bcs{id, tenant}).
+ */
+export async function resolveItemIdToObjectId(
+  itemId: string,
+  tenant: string,
+): Promise<string> {
+  const registry = await getRegistryAddress();
+  const key = bcs
+    .struct("TenantItemId", { id: bcs.u64(), tenant: bcs.string() })
+    .serialize({ id: BigInt(itemId), tenant })
+    .toBytes();
+  return deriveObjectID(
+    registry,
+    `${WORLD_PACKAGE_ID}::in_game_id::TenantItemId`,
+    key,
+  );
+}
 
 function parseBucket(valueJson: unknown): Bucket | undefined {
   const inventory = asRecord(valueJson);

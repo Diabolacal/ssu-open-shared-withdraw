@@ -10,7 +10,7 @@ import {
 } from "./config";
 import { applyDemoAction, demoCharacter, DEMO_TYPE_NAMES } from "./demo";
 import { ItemTable } from "./ItemTable";
-import { firstString } from "./objectReaders";
+import { compactAddress } from "./objectReaders";
 import { OwnerNotice } from "./OwnerNotice";
 import { StatusStrip } from "./StatusStrip";
 import {
@@ -23,6 +23,7 @@ import type { DAppKitSigner, SmartObjectState, StatusState } from "./types";
 import { primeTypeNames, useTypeNames } from "./typeNames";
 import { readUrlContext } from "./urlContext";
 import { usePlayerCharacter } from "./usePlayerCharacter";
+import { useUnitId } from "./useUnitId";
 import { useUnitState } from "./useUnitState";
 import type { Transaction } from "@mysten/sui/transactions";
 
@@ -69,9 +70,7 @@ function App() {
   const account = useCurrentAccount();
   const dAppKit = useDAppKit() as DAppKitSigner;
 
-  const unitId =
-    urlContext.storageUnitId ||
-    firstString(smartObject.assembly, ["id", "objectId", "address"]);
+  const unitId = useUnitId(urlContext, smartObject);
 
   const resolvedCharacter = usePlayerCharacter(
     demo ? undefined : account?.address,
@@ -259,13 +258,26 @@ function App() {
       <header className="topbar">
         <span className="unit-name">{unit?.name || "Storage Unit"}</span>
         <span className="topbar-right">
-          {demo && <span className="tag">Demo</span>}
-          {authorized && <span className="tag">Shared</span>}
+          {demo && (
+            <span className="tag" title="Demo data — transactions are simulated">
+              Demo
+            </span>
+          )}
+          {authorized && (
+            <span className="tag" title="Shared access is enabled on this unit">
+              Shared
+            </span>
+          )}
           {unit && unit.online === false && (
-            <span className="tag warn">Offline</span>
+            <span className="tag warn" title="The unit is offline">
+              Offline
+            </span>
           )}
           {connected ? (
-            <span className="who">{character?.name || "…"}</span>
+            <span className="who" title="Connected as">
+              {character?.name ||
+                (account?.address ? compactAddress(account.address) : "…")}
+            </span>
           ) : hasEveVault ? (
             <button
               type="button"
@@ -279,15 +291,18 @@ function App() {
               No wallet
             </span>
           )}
-          <button
-            type="button"
-            className="step refresh"
-            aria-label="refresh"
-            disabled={loading}
-            onClick={() => void refetch()}
-          >
-            ⟳
-          </button>
+          {unit && (
+            <button
+              type="button"
+              className="step refresh"
+              aria-label="refresh"
+              title="Refresh"
+              disabled={loading}
+              onClick={() => void refetch()}
+            >
+              ⟳
+            </button>
+          )}
         </span>
       </header>
 
