@@ -88,12 +88,15 @@ URL parameters (all optional, first match wins for the unit):
 - `characterId` — manual override for local testing.
 - `demo=1` — canned data, simulated transactions.
 
-Set the unit's dApp URL (in game: F → Edit unit → dApp URL, or on chain via
+Set the unit's dApp URL (in game: Edit Assembly → dApp URL, or on chain via
 `storage_unit::update_metadata_url`, owner-signed) to:
 
 ```
 https://ssu-open-shared-withdraw.pages.dev/?storageUnitId=<unit object id>
 ```
+
+The `?storageUnitId=` part is REQUIRED — the game does not pass the unit to
+custom dApp URLs on its own.
 
 ## Owner setup
 
@@ -113,22 +116,28 @@ https://ssu-open-shared-withdraw.pages.dev/?storageUnitId=<unit object id>
 `docs/screenshots/shot-prod-real.png` shows the deployed app reading a live
 third-party unit (read-only, foreign extension notice).
 
-## Verified in game so far (2026-07-11 smoke test)
+## Verified in game (2026-07-11 smoke tests)
 
-- The dApp loads in the BEHAVIOR panel and the in-game wallet connects
-  (auto-reconnects on reopen).
+- The dApp loads in the BEHAVIOR panel; the in-game wallet connects and
+  auto-reconnects, and signs custom extension transactions (authorize
+  succeeded; the wallet pays gas — sponsorship doesn't cover custom calls).
+- **The game does NOT append `?itemId=` to custom dApp URLs** (despite the
+  builder docs): the URL set on the unit MUST carry the unit id itself,
+  `?storageUnitId=0x…`. The in-app `itemId` derivation is kept in case CCP
+  changes this.
+- The in-game wallet reports transaction success WITHOUT a digest field —
+  never treat a missing digest as failure (transactions.ts).
 - The wallet may carry PlayerProfiles from retired cycles; the character
   lookup filters by the current world package (src/usePlayerCharacter.ts).
-- `?itemId=&tenant=` resolution is done in-app (src/useUnitId.ts +
-  `resolveItemIdToObjectId`), validated against a live unit. The dapp-kit's
-  own resolver additionally needs `VITE_EVE_WORLD_PACKAGE_ID` set — it
-  throws without it (that was the original in-game failure).
+- The dapp-kit's own resolver needs `VITE_EVE_WORLD_PACKAGE_ID` set — it
+  throws without it.
+- The 8s poll picks up in-game drags in and out without manual refresh.
+- Owner detection: the unit's OwnerCap is owned by the character OBJECT
+  (AddressOwner whose address is the character id on the GraphQL schema).
+- Owners can disable shared access again (Owner setup → Disable; calls
+  `storage_unit::revoke_extension_authorization`).
 
 ## Still to verify in game
 
-- Whether take/put/authorize prompt for a signature in game (custom
-  extension calls are NOT covered by the sponsored-transaction feature,
-  which only supports CCP's canned actions — the wallet pays gas).
-- That the game's STORAGE UNIT panel refreshes the visitor's slot promptly
-  after a take.
-- The full visitor flow (take + share) with a second character.
+- The full visitor flow (take + share) with a second character, and how
+  promptly the game's STORAGE UNIT panel reflects a take.

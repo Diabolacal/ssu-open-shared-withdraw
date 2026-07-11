@@ -104,6 +104,32 @@ export function buildAuthorizeTx(input: {
   return tx;
 }
 
+/** Owner turns shared access back off (items stay where they are). */
+export function buildRevokeTx(input: {
+  storageUnitId: string;
+  ownerCharacterId: string;
+  ownerCapId: string;
+}): Transaction {
+  const tx = new Transaction();
+  const [ownerCap, receipt] = tx.moveCall({
+    target: `${WORLD_PACKAGE_ID}::character::borrow_owner_cap`,
+    typeArguments: [`${WORLD_PACKAGE_ID}::storage_unit::StorageUnit`],
+    arguments: [tx.object(input.ownerCharacterId), tx.object(input.ownerCapId)],
+  });
+
+  tx.moveCall({
+    target: `${WORLD_PACKAGE_ID}::storage_unit::revoke_extension_authorization`,
+    arguments: [tx.object(input.storageUnitId), ownerCap],
+  });
+
+  tx.moveCall({
+    target: `${WORLD_PACKAGE_ID}::character::return_owner_cap`,
+    typeArguments: [`${WORLD_PACKAGE_ID}::storage_unit::StorageUnit`],
+    arguments: [tx.object(input.ownerCharacterId), ownerCap, receipt],
+  });
+  return tx;
+}
+
 export async function signAndExecute(
   signer: DAppKitSigner,
   transaction: Transaction,
@@ -111,7 +137,8 @@ export async function signAndExecute(
   const execute = signer.signAndExecute || signer.signAndExecuteTransaction;
   if (!execute) throw new Error("Wallet cannot execute transactions.");
 
+  // The in-game client wallet resolves without a digest field on success;
+  // treat resolving as submitted and report the digest when there is one.
   const result = await execute({ transaction });
-  if (!result.digest) throw new Error("Transaction submitted without a digest.");
-  return result.digest;
+  return result?.digest ?? "";
 }

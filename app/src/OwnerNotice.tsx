@@ -70,8 +70,8 @@ export function OwnerNotice({
   }
 
   // Owner unknown (e.g. opened without in-game context): explain the
-  // read-only state and keep the tool available but out of the way. The
-  // chain rejects non-owners anyway.
+  // read-only state and keep the tool visible (open by default — owners
+  // must be able to find it). The chain rejects non-owners anyway.
   return (
     <>
       {foreign && (
@@ -79,7 +79,7 @@ export function OwnerNotice({
           This unit is running a different dApp, so items cannot be taken here.
         </div>
       )}
-      <details className="owner-tools">
+      <details className="owner-tools" open>
         <summary>Owner setup</summary>
         <div className="notice owner">
           <p>

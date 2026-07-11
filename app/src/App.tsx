@@ -16,6 +16,7 @@ import { StatusStrip } from "./StatusStrip";
 import {
   buildAuthorizeTx,
   buildPutTx,
+  buildRevokeTx,
   buildTakeTx,
   signAndExecute,
 } from "./transactions";
@@ -241,6 +242,19 @@ function App() {
     });
   }
 
+  function revoke() {
+    if (!unit?.ownerCapId || !character) return;
+    void runTx({
+      doneMessage: "Shared access disabled. Items stay where they are.",
+      build: () =>
+        buildRevokeTx({
+          storageUnitId: unit.id,
+          ownerCharacterId: character.id,
+          ownerCapId: unit.ownerCapId!,
+        }),
+    });
+  }
+
   const connected = demo || Boolean(account?.address);
   const packageReady = isConfiguredPackageId(CLAIM_PACKAGE_ID);
   const canTransact =
@@ -395,6 +409,26 @@ function App() {
             </p>
           )}
         </section>
+      )}
+
+      {authorized && isOwner === true && (
+        <details className="owner-tools">
+          <summary>Owner setup</summary>
+          <div className="notice owner">
+            <p>
+              Shared access is on. Disabling stops anyone taking or adding;
+              items stay where they are.
+            </p>
+            <button
+              type="button"
+              className="action wide"
+              disabled={busy}
+              onClick={revoke}
+            >
+              Disable shared access
+            </button>
+          </div>
+        </details>
       )}
 
       <StatusStrip status={status} />

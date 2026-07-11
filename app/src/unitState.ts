@@ -198,17 +198,16 @@ async function resolveCapOwner(capId: string): Promise<string | undefined> {
   try {
     const data = await gql(CAP_OWNER_QUERY, { id: capId });
     const ownerNode = asRecord(asRecord(data?.object)?.owner);
-    const parent = asRecord(ownerNode?.parent);
-    const address = asRecord(ownerNode?.owner);
-    const raw =
-      (typeof parent?.address === "string" && parent.address) ||
-      (typeof address?.address === "string" && address.address) ||
-      undefined;
-    owner = raw ? normalizeSuiAddress(raw) : undefined;
+    const address = asRecord(ownerNode?.address);
+    owner =
+      typeof address?.address === "string"
+        ? normalizeSuiAddress(address.address)
+        : undefined;
   } catch {
     owner = undefined;
   }
-  capOwnerCache.set(capId, owner);
+  // Only cache hits; a transient failure should be retried on the next poll.
+  if (owner) capOwnerCache.set(capId, owner);
   return owner;
 }
 
