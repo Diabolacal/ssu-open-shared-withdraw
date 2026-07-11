@@ -126,15 +126,53 @@ p {
   padding: 3px 6px;
 }
 
-.table-head span {
+.table-head span,
+.table-head button.sort {
   color: var(--dim);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 10px;
 }
 
+/* Header sorts read exactly like the plain labels until hovered. */
+.table-head button.sort {
+  border: none;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.table-head button.sort:hover:not(:disabled) {
+  border: none;
+  background: transparent;
+  color: var(--bright);
+}
+
 .table-head {
   margin-bottom: 4px;
+}
+
+.table-filter {
+  padding: 0 6px 6px;
+}
+
+.table-filter input {
+  width: 100%;
+  border: 1px solid var(--line);
+  padding: 4px 8px;
+  color: var(--bright);
+  background: transparent;
+  font-size: 12px;
+}
+
+.table-filter input:focus {
+  outline: 1px solid var(--bright);
+  outline-offset: 0;
+}
+
+.table-filter input::placeholder {
+  color: var(--dim);
 }
 
 .row-line {

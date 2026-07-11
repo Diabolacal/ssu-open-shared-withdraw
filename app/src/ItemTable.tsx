@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export interface DisplayEntry {
   typeId: number;
@@ -18,6 +18,11 @@ interface ItemTableProps {
   emptyMessage: string;
 }
 
+/** Short lists stay pristine; the filter box only appears past this. */
+const FILTER_THRESHOLD = 20;
+
+type SortState = { key: "name" | "amount"; dir: 1 | -1 };
+
 /**
  * The in-game inventory list look: NAME / AMOUNT / ID columns. When an action
  * is available, clicking a row unfolds a quantity stepper and the action
@@ -32,7 +37,41 @@ export function ItemTable({
 }: ItemTableProps) {
   const [selected, setSelected] = useState<number>();
   const [amount, setAmount] = useState("");
+  const [sort, setSort] = useState<SortState>();
+  const [filter, setFilter] = useState("");
   const tableRef = useRef<HTMLDivElement>(null);
+
+  // Entries arrive name-sorted; header clicks override that order.
+  function toggleSort(key: SortState["key"]) {
+    setSort((prev) => {
+      if (prev?.key === key) return { key, dir: prev.dir === 1 ? -1 : 1 };
+      // Amounts start biggest-first; names start A-to-Z.
+      return { key, dir: key === "amount" ? -1 : 1 };
+    });
+  }
+
+  const filterable = entries.length > FILTER_THRESHOLD;
+  const visible = useMemo(() => {
+    let list = entries;
+    const needle = filterable ? filter.trim().toLowerCase() : "";
+    if (needle) {
+      list = list.filter((entry) => {
+        const name = names[entry.typeId] ?? `Item Type ${entry.typeId}`;
+        return (
+          name.toLowerCase().includes(needle) ||
+          String(entry.typeId).includes(needle)
+        );
+      });
+    }
+    if (!sort) return list;
+    const sorted = [...list].sort((a, b) => {
+      if (sort.key === "amount") return (a.quantity - b.quantity) * sort.dir;
+      const nameA = names[a.typeId] ?? `Item Type ${a.typeId}`;
+      const nameB = names[b.typeId] ?? `Item Type ${b.typeId}`;
+      return nameA.localeCompare(nameB) * sort.dir;
+    });
+    return sorted;
+  }, [entries, names, sort, filter, filterable]);
 
   // Clicking anywhere outside the table, or pressing Escape, closes the
   // open row — matching the "click away to dismiss" instinct.
@@ -74,14 +113,47 @@ export function ItemTable({
     setAmount(String(next));
   }
 
+  function sortMark(key: SortState["key"]) {
+    if (sort?.key !== key) return "";
+    return sort.dir === 1 ? " ▴" : " ▾";
+  }
+
   return (
     <div className="table" role="table" ref={tableRef}>
+      {filterable && (
+        <div className="table-filter">
+          <input
+            type="text"
+            placeholder="Filter items"
+            title="Show only items whose name or ID contains this"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+          />
+        </div>
+      )}
       <div className="table-head" role="row">
-        <span>Name</span>
-        <span>Amount</span>
+        <button
+          type="button"
+          className="sort"
+          title="Sort by name. Click again to reverse."
+          onClick={() => toggleSort("name")}
+        >
+          Name{sortMark("name")}
+        </button>
+        <button
+          type="button"
+          className="sort"
+          title="Sort by amount. Click again to reverse."
+          onClick={() => toggleSort("amount")}
+        >
+          Amount{sortMark("amount")}
+        </button>
         <span>ID</span>
       </div>
-      {entries.map((entry) => {
+      {visible.length === 0 && (
+        <p className="empty">No items match your filter.</p>
+      )}
+      {visible.map((entry) => {
         const isOpen = action && selected === entry.typeId;
         const parsed = Number(amount);
         const valid =
