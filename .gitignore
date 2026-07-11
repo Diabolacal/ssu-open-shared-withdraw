@@ -9,3 +9,4 @@ app/preview*.log
 app/preview*.png
 app/remote-smoke*.png
 move/ssu_open_claim/build/
+app/dist-efmap/
