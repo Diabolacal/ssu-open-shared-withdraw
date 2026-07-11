@@ -216,7 +216,7 @@ function App() {
   function share(typeId: number, quantity: number) {
     if (!unit || !character?.ownerCapId) return;
     void runTx({
-      doneMessage: "Shared. The items are on the shelf for everyone.",
+      doneMessage: "Shared. The items are now in shared storage for anyone to take.",
       build: () =>
         buildPutTx({
           storageUnitId: unit.id,
@@ -357,7 +357,9 @@ function App() {
           }
           busy={busy}
           emptyMessage={
-            loading && !state ? "Reading the unit…" : "Nothing on the shelf yet."
+            loading && !state
+              ? "Reading the unit…"
+              : "Nothing in shared storage yet."
           }
         />
         {shelfCapacity && shelfCapacity.maxCapacity > 0 && (
@@ -405,7 +407,7 @@ function App() {
           {ownEntries.length > 0 && (
             <p className="hint">
               These are only visible to you. Drag them to your inventory in the
-              Storage Unit panel, or share them onto the shelf.
+              Storage Unit panel, or share them into shared storage.
             </p>
           )}
         </section>
