@@ -11,12 +11,18 @@ interface PlayerCharacterState {
 }
 
 // A wallet may hold PlayerProfiles from earlier cycles under retired world
-// packages; filtering by the current world package skips those.
+// packages; filtering by the current world package skips those. Biomassing
+// also leaves dead characters' profiles behind under the CURRENT package, so
+// we fetch the object version and prefer the highest (the live character's
+// profile is the most recently created).
 const PROFILE_QUERY = `
 query ProfileByOwner($owner: SuiAddress!, $type: String!) {
   address(address: $owner) {
-    objects(filter: { type: $type } first: 5) {
-      nodes { contents { json } }
+    objects(filter: { type: $type }, first: 50) {
+      nodes {
+        version
+        contents { json }
+      }
     }
   }
 }`;
@@ -37,7 +43,11 @@ async function resolveViaProfile(
   });
   const nodes = asRecord(asRecord(asRecord(data?.address)?.objects))?.nodes;
   if (!Array.isArray(nodes)) return undefined;
-  for (const node of nodes) {
+  const sorted = [...nodes].sort(
+    (a, b) =>
+      Number(asRecord(b)?.version ?? 0) - Number(asRecord(a)?.version ?? 0),
+  );
+  for (const node of sorted) {
     const json = asRecord(asRecord(asRecord(node)?.contents)?.json);
     if (typeof json?.character_id === "string") return json.character_id;
   }
