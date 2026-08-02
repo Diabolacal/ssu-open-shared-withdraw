@@ -4,7 +4,7 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", "chrome-debug", "preview*.log", "preview*.png"] },
+  { ignores: ["dist", "dist-efmap", "chrome-debug", "preview*.log", "preview*.png"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

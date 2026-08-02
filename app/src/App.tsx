@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useConnection, useSmartObject } from "@evefrontier/dapp-kit";
-import { useCurrentAccount, useDAppKit } from "@mysten/dapp-kit-react";
+import { useCurrentAccount, useDAppKit, useWallets } from "@mysten/dapp-kit-react";
 import {
   CLAIM_AUTH_TYPE,
   CLAIM_PACKAGE_ID,
@@ -84,6 +84,22 @@ function App() {
   const account = useCurrentAccount();
   const dAppKit = useDAppKit() as DAppKitSigner;
 
+  // In game the client wallet connects on its own, first visit included; the
+  // browser EXTENSION never auto-connects (its unlock popup on load is what
+  // the boot-time key clearing in main.tsx removes) — there, Connect is the
+  // click in the top bar. "EVE Frontier Client Wallet" is the CEF-injected
+  // wallet's registered name (dapp-kit SupportedWallets).
+  const wallets = useWallets();
+  const hasClientWallet = wallets.some((wallet) =>
+    wallet.name.includes("EVE Frontier Client Wallet"),
+  );
+  const autoConnectTried = useRef(false);
+  useEffect(() => {
+    if (demo || autoConnectTried.current || account?.address || !hasClientWallet) return;
+    autoConnectTried.current = true;
+    void handleConnect();
+  }, [demo, account?.address, hasClientWallet, handleConnect]);
+
   const [fallbackUnitId, setFallbackUnitId] = useState<string>();
   const unitId = useUnitId(urlContext, smartObject) || fallbackUnitId;
   const lastUnit = useMemo(readLastUnit, []);
@@ -128,7 +144,7 @@ function App() {
     return [...byType.values()].sort((a, b) => a.typeId - b.typeId);
   }, [state?.main, state?.open]);
 
-  const ownEntries = state?.own?.entries ?? [];
+  const ownEntries = useMemo(() => state?.own?.entries ?? [], [state?.own]);
   const names = useTypeNames(
     useMemo(
       () => [
