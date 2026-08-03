@@ -71,3 +71,7 @@ Cross-cutting facts:
 The operator dictates prompts via WhisperTyping; the machine-global agent context
 (`C:\Users\micha\.claude\CLAUDE.md`) carries the vocabulary corrections and conventions. If intent
 is genuinely unclear, ask before starting.
+
+## Closeout
+
+End every task with: repo, branch, starting commit, final commit, pushed (yes/no), production deploy (yes/no), preview deploy (yes/no) + preview URL if relevant, files changed, validation run, known gaps, and preserved unrelated dirt + final `git status`.
