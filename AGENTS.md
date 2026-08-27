@@ -40,6 +40,15 @@ IS the shelf. Two halves:
 The operator dictates prompts via WhisperTyping; his machine-global agent context carries the
 vocabulary corrections and conventions. If intent is genuinely unclear, ask before starting.
 
+## Portfolio control plane
+
+Portfolio-level state for this maintainer's projects is tracked in a private control-plane
+repository, `Diabolacal/project-control`. Agents with access to it should read its record for
+this project and its `NOW.md` before substantial work, and add a factual handoff there at
+closeout when work materially changes project status. This repository's own code and docs remain
+the authority for implementation detail. Do not copy private portfolio information, machine
+paths, or secrets into this public repository.
+
 ## Closeout
 
 End every task with: repo, branch, starting commit, final commit, pushed (yes/no), production deploy (yes/no), preview deploy (yes/no) + preview URL if relevant, files changed, validation run, known gaps, and preserved unrelated dirt + final `git status`.
