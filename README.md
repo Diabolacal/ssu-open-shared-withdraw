@@ -70,7 +70,11 @@ without re-authorization (witness identity is anchored to v1).
 
 Vite + React + `@evefrontier/dapp-kit` in `app/`. Reads go through the public
 Sui GraphQL endpoint (paginated dynamic-field walk in `src/unitState.ts`);
-item names come from the world API (`/v2/types/{id}`).
+item names come from `app/src/data/typeNames.json` (a typeId -> name map
+extracted from the game client's type table, regenerated on patch day), with
+the world API (`/v2/types/{id}`) as a fallback for ids the map lacks. The
+world API stopped listing new content in mid-2026, so the bundled map is what
+keeps newer items from rendering as "type 95988".
 
 ```powershell
 pnpm install

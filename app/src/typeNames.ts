@@ -1,10 +1,22 @@
 import { useEffect, useState } from "react";
+import bundledTypeNames from "./data/typeNames.json";
 
 // The dapp-kit's getDatahubGameInfo points at the retired
 // world-api-stillness.live.tech host, so we call the world API directly.
 const WORLD_API_HOST =
   import.meta.env.VITE_WORLD_API_HOST ||
   "world-api-stillness.live.pub.evefrontier.com";
+
+/**
+ * Names ship with the app (src/data/typeNames.json, extracted from the game
+ * client's type table on patch day) and are consulted first. The world API's
+ * /v2/types table stopped tracking new content in mid-2026, so anything added
+ * since then 404s there; it stays as a fallback only for ids the bundle lacks.
+ */
+const BUNDLED_NAMES: Record<string, string> = bundledTypeNames.names;
+
+/** Client build the bundled names came from; shown nowhere yet, kept for diagnostics. */
+export const BUNDLED_NAMES_BUILD: number = bundledTypeNames.clientBuild;
 
 const nameCache = new Map<number, string>();
 const pending = new Map<number, Promise<string>>();
@@ -19,6 +31,12 @@ export function primeTypeNames(names: Record<number, string>): void {
 async function resolveTypeName(typeId: number): Promise<string> {
   const cached = nameCache.get(typeId);
   if (cached) return cached;
+
+  const bundled = BUNDLED_NAMES[String(typeId)];
+  if (bundled) {
+    nameCache.set(typeId, bundled);
+    return bundled;
+  }
 
   let inflight = pending.get(typeId);
   if (!inflight) {
@@ -40,8 +58,8 @@ async function resolveTypeName(typeId: number): Promise<string> {
 }
 
 /**
- * Resolves type_ids to player-facing names via the EVE Frontier world API.
- * Unresolved ids fall back to "type <id>".
+ * Resolves type_ids to player-facing names: bundled client names first, then
+ * the EVE Frontier world API. Unresolved ids fall back to "type <id>".
  */
 export function useTypeNames(typeIds: number[]): Record<number, string> {
   const [names, setNames] = useState<Record<number, string>>({});
