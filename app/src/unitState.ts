@@ -112,9 +112,9 @@ query CapOwner($id: SuiAddress!) {
   }
 }`;
 
-// Known Stillness cycle-6 registry; used if the type query ever comes back empty.
+// Known Stillness cycle-7 registry; used if the type query ever comes back empty.
 const OBJECT_REGISTRY_FALLBACK =
-  "0xf6aed9361acc0d7021672b653ebe9dae45d88e11fecef01cc5434c8f60ae764f";
+  "0x8fd47e6e5cf8cb9b789cef26fbb674be819d8abd6afccaf50e95451212f0813a";
 
 const REGISTRY_QUERY = `
 query Registry($type: String!) {

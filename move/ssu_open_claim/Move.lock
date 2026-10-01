@@ -29,13 +29,13 @@ manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet_stillness.MoveStdlib]
-source = { git = "https://github.com/MystenLabs/sui.git", subdir = 'crates\sui-framework\packages\move-stdlib', rev = "384b1c7ff289b32ed2664f29dc47dbc879fa43ee" }
+source = { git = "https://github.com/MystenLabs/sui.git", subdir = 'crates\sui-framework\packages\move-stdlib', rev = "b0535f1f3a3310e71790e90d8ae4e8ca840c897e" }
 use_environment = "testnet_stillness"
 manifest_digest = "C4FE4C91DE74CBF223B2E380AE40F592177D21870DC2D7EB6227D2D694E05363"
 deps = {}
 
 [pinned.testnet_stillness.Sui]
-source = { git = "https://github.com/MystenLabs/sui.git", subdir = 'crates\sui-framework\packages\sui-framework', rev = "384b1c7ff289b32ed2664f29dc47dbc879fa43ee" }
+source = { git = "https://github.com/MystenLabs/sui.git", subdir = 'crates\sui-framework\packages\sui-framework', rev = "b0535f1f3a3310e71790e90d8ae4e8ca840c897e" }
 use_environment = "testnet_stillness"
 manifest_digest = "38D8855849DF7CA0FAD3B9510DD9EC3755149F5B283E45CA6547194ADFF90D73"
 deps = { MoveStdlib = "MoveStdlib" }
@@ -43,11 +43,11 @@ deps = { MoveStdlib = "MoveStdlib" }
 [pinned.testnet_stillness.ssu_open_claim]
 source = { root = true }
 use_environment = "testnet_stillness"
-manifest_digest = "3885EBA5DDC8F7443F7A1FCE6A1D91728BFE574FC39E157009D86B220E9C71EF"
+manifest_digest = "EE39C3D027E8F5FBF47A03557E1AA54B3C2F1B25EDA3A6630D2199570C5564A9"
 deps = { std = "MoveStdlib", sui = "Sui", world = "world" }
 
 [pinned.testnet_stillness.world]
-source = { local = '..\..\..\sui-playground\vendor\world-contracts\contracts\world' }
+source = { git = "https://github.com/evefrontier/world-contracts.git", subdir = 'contracts\world', rev = "d33ff232bd3878e8f9ad0721e18564b21facc925" }
 use_environment = "testnet_stillness"
 manifest_digest = "16363423CD37589C5B9A56E3F9E984FED988276E0134635135B45CB4480A9484"
 deps = { std = "MoveStdlib", sui = "Sui" }

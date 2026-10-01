@@ -1,6 +1,6 @@
 export const WORLD_PACKAGE_ID =
   import.meta.env.VITE_WORLD_PACKAGE_ID ||
-  "0x8b8a46ed766fa1358ce7c5c51f6a164b13d627a63e45343f69ed0ba0446c1aa1";
+  "0x7be18d6294e533bedd9a5d70a96ce8d9d4b87a7c74188ba65d3fe966bbed9d92";
 
 /** Call target: the latest published-at address of ssu_open_claim. */
 export const CLAIM_PACKAGE_ID = import.meta.env.VITE_CLAIM_PACKAGE_ID || "";
@@ -12,7 +12,7 @@ export const CLAIM_PACKAGE_ID = import.meta.env.VITE_CLAIM_PACKAGE_ID || "";
  */
 export const CLAIM_AUTH_PACKAGE_ID =
   import.meta.env.VITE_CLAIM_AUTH_PACKAGE_ID ||
-  "0x4defff877661097a0fdfac67a87dc6e23f37b1664cff81bb166037a34930f610";
+  "0x679214b103db42dd074bb454914e61b18ac881b9a9e9f121a9b318dd61c56594";
 
 export const CLAIM_MODULE = import.meta.env.VITE_CLAIM_MODULE || "claim";
 

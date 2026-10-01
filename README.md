@@ -51,20 +51,34 @@ Key world-contract facts this relies on (v0.0.24, `testnet_stillness`):
 
 ## Current testnet deployment
 
-- Environment: `testnet_stillness`, world package
-  `0x8b8a46ed766fa1358ce7c5c51f6a164b13d627a63e45343f69ed0ba0446c1aa1`
-- Claim package **v3** (adds `take` / `put`):
-  `0x37bf31ff7ce1e5ddc91b038153f0f3488ca4ab311a0d972a305c9f9bcccc46e3`
-- Original id (v1, the witness's defining id — never changes):
-  `0x4defff877661097a0fdfac67a87dc6e23f37b1664cff81bb166037a34930f610`
-- UpgradeCap: `0x62e423dee9a9247248489e8ff61aba08578fa24f3ee2e6427844f7a232095f05`
+- Environment: `testnet_stillness` **Cycle 7**, world package
+  `0x7be18d6294e533bedd9a5d70a96ce8d9d4b87a7c74188ba65d3fe966bbed9d92`
+  (upstream `evefrontier/world-contracts` main `d33ff232b`, pinned by git in
+  `move/ssu_open_claim/Move.toml`)
+- Claim package (fresh v1 publish, 2026-10-01, tx
+  `7dKQbwN18kQj3apx87nghuo9sg6rRX694UbDEVg8DLbz`; published-at and original
+  id are the same, so it is also the ClaimAuth witness's defining id):
+  `0x679214b103db42dd074bb454914e61b18ac881b9a9e9f121a9b318dd61c56594`
+- UpgradeCap: `0x5b9ce05bb839f145c4f62d4ded08facf0a49944f0934dfc1351248489fb1c4c8`
   (held by the operator CLI address)
 
-Upgrades: `sui client upgrade move/ssu_open_claim` (CLI ≥ the network's
-protocol version; `suiup install sui@testnet` to refresh), then copy the new
-`published-at` from `move/ssu_open_claim/Published.toml` into
+Upgrades within a cycle: `sui client upgrade move/ssu_open_claim` (CLI ≥ the
+network's protocol version; `suiup install sui@testnet` to refresh), then copy
+the new `published-at` from `move/ssu_open_claim/Published.toml` into
 `VITE_CLAIM_PACKAGE_ID` and redeploy the app. Authorized units keep working
-without re-authorization (witness identity is anchored to v1).
+without re-authorization (witness identity is anchored to the original id).
+
+New cycle (CCP publishes a new world package): an upgrade cannot relink to a
+new world, so bump the world `rev` in `Move.toml` to the upstream commit whose
+`contracts/world/Published.toml` carries the new `testnet_stillness` world,
+delete this package's `[published.testnet_stillness]` block, and do a fresh
+`sui client publish`. Both claim ids then change; update `app/.env.production`,
+the fallbacks in `app/src/config.ts` and `app/src/unitState.ts`, and any
+embedding host's copy of the ids. Units authorized in the old cycle stay
+orphaned on the old world; owners enable sharing again.
+
+Earlier deployments: Cycle 6 world `0x8b8a46ed…1aa1`, claim v3
+`0x37bf31ff…46e3` (original `0x4defff87…f610`).
 
 ## App
 

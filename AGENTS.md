@@ -30,10 +30,11 @@ IS the shelf. Two halves:
 5. Gates before commit: `pnpm --dir app build` and `sui move test --path move/ssu_open_claim`.
 6. Production deploy only on explicit operator instruction; a push or merge is not permission.
 7. Preserve unrelated dirty-tree work; never run destructive git cleanup.
-8. `move/ssu_open_claim/Move.toml` depends on the world package via a **relative path into the
-   sui-playground repo** (`../../../sui-playground/vendor/world-contracts/contracts/world`).
-   Updating that submodule in sui-playground (e.g. to the v1 `dev` branch) breaks THIS repo's
-   Move build with no commit here — coordinate vendor bumps across both repos.
+8. `move/ssu_open_claim/Move.toml` pins the world package **by git** to an exact upstream
+   `evefrontier/world-contracts` commit (`contracts/world`). Only ever pin a `main` commit whose
+   `contracts/world/Published.toml` `[published.testnet_stillness]` is the live world; never a
+   `dev` commit (the v1 rewrite). A new cycle needs a fresh publish, not an upgrade; see README
+   "Current testnet deployment".
 
 ## Operator communication
 

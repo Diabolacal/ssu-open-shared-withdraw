@@ -3,7 +3,8 @@ name = "ssu_open_claim"
 edition = "2024"
 
 [dependencies]
-world = { local = "../../../sui-playground/vendor/world-contracts/contracts/world" }
+# Cycle 7 Stillness world (published-at 0x7be18d62...d92), pinned to upstream main.
+world = { git = "https://github.com/evefrontier/world-contracts.git", subdir = "contracts/world", rev = "d33ff232bd3878e8f9ad0721e18564b21facc925" }
 
 [environments]
 testnet_stillness = "4c78adac"
