@@ -46,9 +46,14 @@ function panelAt(x: number, y: number): PanelId | undefined {
 
 export function useTileDrag(onDrop: (event: DropEvent) => void) {
   const [drag, setDrag] = useState<DragState>();
-  const press = useRef<{ payload: DragPayload; x: number; y: number; active: boolean }>(
-    undefined,
-  );
+  const press = useRef<{
+    payload: DragPayload;
+    x: number;
+    y: number;
+    active: boolean;
+    /** The host reported the held button at pointerdown (see onMove). */
+    tracksButtons: boolean;
+  }>(undefined);
   const onDropRef = useRef(onDrop);
   onDropRef.current = onDrop;
 
@@ -61,6 +66,15 @@ export function useTileDrag(onDrop: (event: DropEvent) => void) {
     function onMove(event: PointerEvent) {
       const current = press.current;
       if (!current) return;
+      // The release happened somewhere we never heard about (e.g. outside
+      // the in-game browser surface): drop the drag rather than leave a
+      // ghost glued to a cursor with no button held. Only trusted when the
+      // host reported the button at pointerdown, so hosts that never fill
+      // in `buttons` still drag normally.
+      if (current.tracksButtons && (event.buttons & 1) === 0) {
+        end();
+        return;
+      }
       if (!current.active) {
         const distance = Math.hypot(event.clientX - current.x, event.clientY - current.y);
         if (distance < DRAG_THRESHOLD) return;
@@ -108,7 +122,13 @@ export function useTileDrag(onDrop: (event: DropEvent) => void) {
   /** Call from a tile's onPointerDown. */
   const begin = useCallback((event: ReactPointerEvent, payload: DragPayload) => {
     if (event.button !== 0 || event.pointerType === "touch" || payload.max <= 0) return;
-    press.current = { payload, x: event.clientX, y: event.clientY, active: false };
+    press.current = {
+      payload,
+      x: event.clientX,
+      y: event.clientY,
+      active: false,
+      tracksButtons: (event.buttons & 1) === 1,
+    };
   }, []);
 
   return { drag, begin };

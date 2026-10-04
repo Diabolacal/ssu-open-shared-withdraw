@@ -43,14 +43,17 @@ export function QuantityDialog({
         if (event.target === event.currentTarget) onCancel();
       }}
     >
-      <div
+      <form
         className="dialog"
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        onSubmit={(event) => {
+          event.preventDefault();
+          submit();
+        }}
         onKeyDown={(event) => {
           if (event.key === "Escape") onCancel();
-          if (event.key === "Enter") submit();
         }}
       >
         <div className="dialog-title">{title}</div>
@@ -69,6 +72,11 @@ export function QuantityDialog({
             inputMode="numeric"
             value={value}
             onChange={(event) => setValue(event.target.value.replace(/[^0-9]/g, ""))}
+            onKeyDown={(event) => {
+              // A held Enter (e.g. the Shift+Enter that opened this box)
+              // auto-repeats; only a fresh press confirms.
+              if (event.key === "Enter" && event.repeat) event.preventDefault();
+            }}
           />
           <button
             type="button"
@@ -92,16 +100,15 @@ export function QuantityDialog({
             Cancel
           </button>
           <button
-            type="button"
+            type="submit"
             className="action"
             title="Stage this amount. Nothing moves until you confirm below."
             disabled={!valid}
-            onClick={submit}
           >
             OK
           </button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }

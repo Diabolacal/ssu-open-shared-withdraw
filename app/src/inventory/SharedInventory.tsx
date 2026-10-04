@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { StatusState } from "../types";
 import { useTypeIcons } from "../typeIcons";
@@ -8,6 +8,7 @@ import {
   clampPending,
   panelTiles,
   pendingVolumeDelta,
+  pendingVolumeIn,
   stageMove,
   summarize,
 } from "./moves";
@@ -40,6 +41,8 @@ interface SharedInventoryProps {
    * transaction succeeds (before re-reading the unit) and resolve when done.
    */
   onCommit: (summary: MoveSummary, clearStaged: () => void) => Promise<void>;
+  /** The player changed what is staged (retires stale status messages). */
+  onStagingChange: () => void;
 }
 
 const EMPTY: PendingMoves = new Map();
@@ -70,6 +73,7 @@ export function SharedInventory({
   sharedEmpty,
   ownEmpty,
   onCommit,
+  onStagingChange,
 }: SharedInventoryProps) {
   const iconOf = useTypeIcons();
   const [pending, setPending] = useState<PendingMoves>(EMPTY);
@@ -88,28 +92,35 @@ export function SharedInventory({
   }, [shared, own]);
 
   // Refreshes (every few seconds) may shrink stacks under staged moves, and
-  // permissions can drop (wallet disconnect): keep the staging truthful.
-  useEffect(() => {
-    setPending((current) => {
-      let next = clampPending(current, lookups.sharedQty, lookups.ownQty);
-      if (!canTake || !canShare) {
-        const kept = new Map([...next].filter(([, d]) => (d > 0 ? canTake : canShare)));
-        if (kept.size !== next.size) next = kept;
-      }
-      return next;
-    });
-  }, [lookups, canTake, canShare]);
+  // permissions can drop (wallet disconnect). The truthful staging is derived
+  // DURING render, so a commit can never send a pre-refresh amount; the raw
+  // state only records what the player asked for.
+  const normalize = useCallback(
+    (raw: PendingMoves): PendingMoves => {
+      const next = clampPending(raw, lookups.sharedQty, lookups.ownQty);
+      if (canTake && canShare) return next;
+      const kept = new Map([...next].filter(([, d]) => (d > 0 ? canTake : canShare)));
+      return kept.size === next.size ? next : kept;
+    },
+    [lookups, canTake, canShare],
+  );
+  const staged = useMemo(() => normalize(pending), [normalize, pending]);
 
   const stage = useCallback(
-    (typeId: number, from: PanelId, amount: number) => {
+    (typeId: number, from: PanelId, amount: number, ghost: boolean) => {
       setPending((current) =>
-        stageMove(current, typeId, from, amount, {
-          shared: lookups.sharedQty(typeId),
-          own: lookups.ownQty(typeId),
-        }),
+        stageMove(
+          normalize(current),
+          typeId,
+          from,
+          amount,
+          { shared: lookups.sharedQty(typeId), own: lookups.ownQty(typeId) },
+          ghost,
+        ),
       );
+      onStagingChange();
     },
-    [lookups],
+    [lookups, normalize, onStagingChange],
   );
 
   const onDrop = useCallback(
@@ -119,7 +130,7 @@ export function SharedInventory({
         const { typeId, from, max, ghost } = event;
         setPrompt({ typeId, from, max, ghost });
       } else {
-        stage(event.typeId, event.from, event.max);
+        stage(event.typeId, event.from, event.max, event.ghost);
       }
     },
     [busy, stage],
@@ -127,44 +138,59 @@ export function SharedInventory({
 
   const { drag, begin } = useTileDrag(onDrop);
 
-  const summary = useMemo(() => summarize(pending), [pending]);
-  const sharedTiles = useMemo(() => panelTiles("shared", shared, pending), [shared, pending]);
-  const ownTiles = useMemo(() => panelTiles("own", own, pending), [own, pending]);
+  const summary = useMemo(() => summarize(staged), [staged]);
+  const sharedTiles = useMemo(() => panelTiles("shared", shared, staged), [shared, staged]);
+  const ownTiles = useMemo(() => panelTiles("own", own, staged), [own, staged]);
 
-  function capacityOf(panel: PanelId, bucket?: Bucket) {
+  function capacityOf(panel: PanelId, moves: PendingMoves, bucket?: Bucket) {
     if (!bucket || bucket.max <= 0) return undefined;
-    const projected = bucket.used + pendingVolumeDelta(panel, pending, lookups.volume);
+    const projected = bucket.used + pendingVolumeDelta(panel, moves, lookups.volume);
     return { used: bucket.used, max: bucket.max, projected };
   }
-  const sharedCapacity = capacityOf("shared", sharedBucket);
-  const ownCapacity = capacityOf("own", ownBucket);
 
-  const blockedReason =
-    sharedCapacity && sharedCapacity.projected > sharedCapacity.max
-      ? "Not enough room in shared storage for everything staged."
-      : ownCapacity && ownCapacity.projected > ownCapacity.max
-        ? "Not enough room in your items for everything staged."
-        : undefined;
+  /**
+   * Mirrors buildMoveTx's order (takes, then shares): shared storage only
+   * has to hold the NET result, but your items must hold everything taken
+   * before any share leaves.
+   */
+  function blockedFor(moves: PendingMoves): string | undefined {
+    const sharedAfter = capacityOf("shared", moves, sharedBucket);
+    if (sharedAfter && sharedAfter.projected > sharedAfter.max) {
+      return "Not enough room in shared storage for everything staged.";
+    }
+    if (ownBucket && ownBucket.max > 0) {
+      const ownPeak = ownBucket.used + pendingVolumeIn("own", moves, lookups.volume);
+      if (ownPeak > ownBucket.max) return "Not enough room in your items for everything staged.";
+    }
+    return undefined;
+  }
+
+  const sharedCapacity = capacityOf("shared", staged, sharedBucket);
+  const ownCapacity = capacityOf("own", staged, ownBucket);
+  const blockedReason = blockedFor(staged);
 
   const clearStaged = useCallback(() => setPending(EMPTY), []);
 
-  function commit(moves: MoveSummary) {
-    if (busy) return;
-    void onCommit(moves, clearStaged);
+  function commit(moves: PendingMoves) {
+    if (busy || blockedFor(moves)) return;
+    void onCommit(summarize(moves), clearStaged);
   }
 
+  /** Stage the whole of your items; send it unless it cannot fit. */
   function shareAll() {
+    if (busy) return;
     const everything: PendingMoves = new Map(own.map((e) => [e.typeId, -e.quantity]));
     setPending(everything);
-    commit(summarize(everything));
+    onStagingChange();
+    commit(everything);
   }
 
   const moveAllOf = (panel: PanelId) => (tile: TileModel) => {
-    if (!busy) stage(tile.typeId, panel, tile.quantity);
+    if (!busy) stage(tile.typeId, panel, tile.quantity, tile.ghost);
   };
   const pickAmountOf = (panel: PanelId) => (tile: TileModel) => {
     if (busy) return;
-    if (tile.quantity <= 1) stage(tile.typeId, panel, tile.quantity);
+    if (tile.quantity <= 1) stage(tile.typeId, panel, tile.quantity, tile.ghost);
     else setPrompt({ typeId: tile.typeId, from: panel, max: tile.quantity, ghost: tile.ghost });
   };
 
@@ -193,8 +219,8 @@ export function SharedInventory({
       frozen={busy}
       moveHint={
         panel === "shared"
-          ? "Drag down to take. Shift-drag to choose an amount."
-          : "Drag up to share. Shift-drag to choose an amount."
+          ? "Drag down to take, or double-click for the whole stack. Shift-drag or right-click to choose an amount."
+          : "Drag up to share, or double-click for the whole stack. Shift-drag or right-click to choose an amount."
       }
       dropReady={Boolean(drag) && drag?.from !== panel}
       dropHover={drag?.over === panel}
@@ -217,8 +243,11 @@ export function SharedInventory({
         blockedReason={blockedReason}
         canShareAll={canShare && own.length > 0}
         onShareAll={shareAll}
-        onCommit={() => commit(summary)}
-        onClear={clearStaged}
+        onCommit={() => commit(staged)}
+        onClear={() => {
+          clearStaged();
+          onStagingChange();
+        }}
       />
       {panels[1]}
 
@@ -244,7 +273,7 @@ export function SharedInventory({
           max={prompt.max}
           onCancel={() => setPrompt(undefined)}
           onConfirm={(amount) => {
-            stage(prompt.typeId, prompt.from, amount);
+            stage(prompt.typeId, prompt.from, amount, prompt.ghost);
             setPrompt(undefined);
           }}
         />

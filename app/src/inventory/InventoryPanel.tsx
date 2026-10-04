@@ -101,7 +101,9 @@ export function InventoryPanel({
                   name={nameOf(tile.typeId)}
                   iconUrl={iconOf(tile.typeId)}
                   movable={movable}
-                  moveHint={tile.ghost ? "Drag back or double-click to undo" : moveHint}
+                  moveHint={
+                    tile.ghost ? "Drag back or double-click to undo. Right-click for an amount." : moveHint
+                  }
                   onPointerDown={(event) =>
                     onBeginDrag(event, {
                       typeId: tile.typeId,

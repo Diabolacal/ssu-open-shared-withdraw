@@ -47,14 +47,23 @@ export function MoveBar({
         ? "Take everything staged into your items, in one transaction"
         : "Share everything staged into shared storage, in one transaction";
 
+  // A transaction in flight speaks first; then anything stopping the staged
+  // moves; then the last result (staging changes retire it, see App).
+  const inFlight =
+    status.state === "building" ||
+    status.state === "awaiting-signature" ||
+    status.state === "submitted";
   let message: string;
   let tone = "";
-  if (status.state !== "idle") {
+  if (inFlight) {
     message = status.message;
     tone = `status-${status.state}`;
   } else if (staged && blockedReason) {
     message = blockedReason;
     tone = "status-failed";
+  } else if (status.state !== "idle") {
+    message = status.message;
+    tone = `status-${status.state}`;
   } else if (staged) {
     const parts = [];
     if (takes) parts.push(`Taking ${stacks(takes)}`);

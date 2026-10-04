@@ -1,6 +1,7 @@
 import { Transaction } from "@mysten/sui/transactions";
 import { CLAIM_MODULE, CLAIM_PACKAGE_ID, WORLD_PACKAGE_ID } from "./config";
 import type { DAppKitSigner } from "./types";
+import { gql } from "./unitState";
 
 function claimTarget(functionName: string): string {
   return `${CLAIM_PACKAGE_ID}::${CLAIM_MODULE}::${functionName}`;
@@ -21,7 +22,13 @@ export interface ShareLine {
 
 /**
  * Every staged move in ONE transaction (one signature, one gas charge).
- * Shares run first so a full personal slot frees room before takes land.
+ *
+ * Takes run first. Every deposit is capacity-checked, and the side that
+ * fills up is the main hangar (a personal slot is created with the main
+ * hangar's own max capacity), so letting takes free main-hangar room before
+ * shares land means the transaction fits whenever the NET result fits. The
+ * capacity preview in SharedInventory assumes exactly this order.
+ *
  * The character's OwnerCap is borrowed once and passed by reference to every
  * `put`, then returned; `take` needs no cap.
  */
@@ -33,6 +40,31 @@ export function buildMoveTx(input: {
   shares: ShareLine[];
 }): Transaction {
   const tx = new Transaction();
+
+  for (const take of input.takes) {
+    if (take.mainQuantity > 0) {
+      tx.moveCall({
+        target: claimTarget("take"),
+        arguments: [
+          tx.object(input.storageUnitId),
+          tx.object(input.characterId),
+          tx.pure.u64(BigInt(take.typeId)),
+          tx.pure.u32(take.mainQuantity),
+        ],
+      });
+    }
+    if (take.openQuantity > 0) {
+      tx.moveCall({
+        target: claimTarget("claim_from_open"),
+        arguments: [
+          tx.object(input.storageUnitId),
+          tx.object(input.characterId),
+          tx.pure.u64(BigInt(take.typeId)),
+          tx.pure.u32(take.openQuantity),
+        ],
+      });
+    }
+  }
 
   if (input.shares.length > 0) {
     if (!input.characterOwnerCapId) throw new Error("Character not ready to share yet.");
@@ -58,31 +90,6 @@ export function buildMoveTx(input: {
       typeArguments: [`${WORLD_PACKAGE_ID}::character::Character`],
       arguments: [tx.object(input.characterId), ownerCap, receipt],
     });
-  }
-
-  for (const take of input.takes) {
-    if (take.mainQuantity > 0) {
-      tx.moveCall({
-        target: claimTarget("take"),
-        arguments: [
-          tx.object(input.storageUnitId),
-          tx.object(input.characterId),
-          tx.pure.u64(BigInt(take.typeId)),
-          tx.pure.u32(take.mainQuantity),
-        ],
-      });
-    }
-    if (take.openQuantity > 0) {
-      tx.moveCall({
-        target: claimTarget("claim_from_open"),
-        arguments: [
-          tx.object(input.storageUnitId),
-          tx.object(input.characterId),
-          tx.pure.u64(BigInt(take.typeId)),
-          tx.pure.u32(take.openQuantity),
-        ],
-      });
-    }
   }
   return tx;
 }
@@ -150,4 +157,34 @@ export async function signAndExecute(
   // treat resolving as submitted and report the digest when there is one.
   const result = await execute({ transaction });
   return result?.digest ?? "";
+}
+
+const INDEX_POLL_MS = 500;
+const INDEX_TIMEOUT_MS = 12_000;
+/** The in-game wallet returns no digest; give the indexer this long instead. */
+const NO_DIGEST_SETTLE_MS = 3_000;
+
+const TX_QUERY = `query TxIndexed($digest: String!) { transaction(digest: $digest) { digest } }`;
+
+/**
+ * Resolves once the public GraphQL index has the transaction, so a re-read
+ * shows its effects instead of the pre-transaction inventories. Gives up
+ * quietly after a timeout (the regular poll catches up from there).
+ */
+export async function waitForIndexed(digest: string): Promise<void> {
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  if (!digest) {
+    await sleep(NO_DIGEST_SETTLE_MS);
+    return;
+  }
+  const deadline = Date.now() + INDEX_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    try {
+      const data = await gql(TX_QUERY, { digest });
+      if ((data?.transaction as { digest?: string } | null)?.digest) return;
+    } catch {
+      // Transient read failure: keep waiting until the deadline.
+    }
+    await sleep(INDEX_POLL_MS);
+  }
 }

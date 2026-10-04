@@ -17,6 +17,7 @@ import {
   buildMoveTx,
   buildRevokeTx,
   signAndExecute,
+  waitForIndexed,
 } from "./transactions";
 import type { DAppKitSigner, SmartObjectState, StatusState } from "./types";
 import { useTypeNames } from "./typeNames";
@@ -172,7 +173,12 @@ function App() {
     message: "",
   });
   const statusTimer = useRef<number | undefined>(undefined);
-  const busy = status.state === "building" || status.state === "awaiting-signature";
+  // "submitted" covers the settle wait after signing: staged ghosts stay up
+  // and nothing can be re-staged until the fresh read lands.
+  const busy =
+    status.state === "building" ||
+    status.state === "awaiting-signature" ||
+    status.state === "submitted";
 
   function settleStatus(next: StatusState, clearAfterMs?: number) {
     window.clearTimeout(statusTimer.current);
@@ -189,8 +195,11 @@ function App() {
     doneMessage: string;
     build: () => Transaction;
     simulate?: () => Promise<void>;
-    /** Runs once the transaction has gone through, before the re-read. */
-    afterExecute?: () => void;
+    /**
+     * Runs once the transaction's effects have been re-read, so staged ghosts
+     * hand straight over to the real result (no snap-back in between).
+     */
+    onSettled?: () => void;
   }) {
     try {
       if (demo && input.simulate) {
@@ -203,10 +212,12 @@ function App() {
           state: "awaiting-signature",
           message: "Confirm in your wallet…",
         });
-        await signAndExecute(dAppKit, tx);
+        const digest = await signAndExecute(dAppKit, tx);
+        settleStatus({ state: "submitted", message: "Sent. Updating…" });
+        await waitForIndexed(digest);
       }
-      input.afterExecute?.();
-      await refetch();
+      await refetch({ fresh: true });
+      input.onSettled?.();
       settleStatus({ state: "done", message: input.doneMessage }, 9000);
     } catch (cause) {
       settleStatus({
@@ -215,6 +226,13 @@ function App() {
           cause instanceof Error ? cause.message : "Something went wrong.",
         ),
       });
+    }
+  }
+
+  /** A new staging action retires an old failure/done message. */
+  function clearStaleStatus() {
+    if (status.state === "failed" || status.state === "done") {
+      settleStatus({ state: "idle", message: "" });
     }
   }
 
@@ -246,7 +264,7 @@ function App() {
           shares,
         }),
       simulate: () => applyDemoMoves(moves.takes, moves.shares),
-      afterExecute: clearStaged,
+      onSettled: clearStaged,
     });
   }
 
@@ -306,7 +324,10 @@ function App() {
       ? "Connect to take or share items."
       : "Open this in game, or install EVE Vault, to take or share items.";
   } else if (unit && !authorized) {
-    hint = "Read only until the owner enables shared access.";
+    hint =
+      isOwner === true
+        ? "Enable shared access above so others can take and share."
+        : "Read only until the owner enables shared access.";
   } else if (unit?.online === false) {
     hint = "This unit is offline.";
   } else if (isOwner === true) {
@@ -412,6 +433,8 @@ function App() {
 
       {unit && (
         <SharedInventory
+          // A different wallet/character starts with nothing staged.
+          key={character?.id ?? "no-character"}
           shared={shelfSorted}
           own={ownSorted}
           sharedBucket={
@@ -435,6 +458,7 @@ function App() {
           }
           ownEmpty={ownEmpty}
           onCommit={commitMoves}
+          onStagingChange={clearStaleStatus}
         />
       )}
 

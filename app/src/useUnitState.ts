@@ -4,11 +4,20 @@ import { fetchDemoUnitState } from "./demo";
 
 const POLL_MS = 8000;
 
+interface RefetchOptions {
+  /**
+   * Guarantee a read that STARTS after this call. Without it, a call while a
+   * poll is in flight just joins that poll, whose result may predate a
+   * transaction that has just landed.
+   */
+  fresh?: boolean;
+}
+
 interface UnitStateHook {
   state?: UnitState;
   loading: boolean;
   error?: string;
-  refetch: () => Promise<void>;
+  refetch: (options?: RefetchOptions) => Promise<void>;
 }
 
 /**
@@ -23,16 +32,10 @@ export function useUnitState(
   const [state, setState] = useState<UnitState>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
-  const inflight = useRef(false);
+  const inflight = useRef<Promise<void>>(undefined);
 
-  const refetch = useCallback(async () => {
-    if (demo) {
-      setState(fetchDemoUnitState());
-      setError(undefined);
-      return;
-    }
-    if (!storageUnitId || inflight.current) return;
-    inflight.current = true;
+  const read = useCallback(async () => {
+    if (!storageUnitId) return;
     setLoading(true);
     try {
       const next = await fetchUnitState(storageUnitId, characterOwnerCapId);
@@ -43,10 +46,32 @@ export function useUnitState(
         cause instanceof Error ? cause.message : "Could not read the unit.",
       );
     } finally {
-      inflight.current = false;
       setLoading(false);
     }
-  }, [storageUnitId, characterOwnerCapId, demo]);
+  }, [storageUnitId, characterOwnerCapId]);
+
+  const refetch = useCallback(
+    async (options?: RefetchOptions) => {
+      if (demo) {
+        setState(fetchDemoUnitState());
+        setError(undefined);
+        return;
+      }
+      const running = inflight.current;
+      if (running) {
+        if (!options?.fresh) return running;
+        await running;
+        // A read started after `running` finished also postdates this call.
+        if (inflight.current) return inflight.current;
+      }
+      const job = read().finally(() => {
+        if (inflight.current === job) inflight.current = undefined;
+      });
+      inflight.current = job;
+      return job;
+    },
+    [demo, read],
+  );
 
   useEffect(() => {
     void refetch();

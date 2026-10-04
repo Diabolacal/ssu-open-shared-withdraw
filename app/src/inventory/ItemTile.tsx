@@ -1,4 +1,5 @@
-import type { KeyboardEvent, PointerEvent } from "react";
+import { useRef } from "react";
+import type { KeyboardEvent, MouseEvent, PointerEvent } from "react";
 import { formatQuantity } from "./format";
 import type { TileModel } from "./moves";
 
@@ -13,9 +14,12 @@ interface ItemTileProps {
   onPointerDown: (event: PointerEvent) => void;
   /** Move the whole tile across (double-click, Enter). */
   onMoveAll: () => void;
-  /** Ask for an amount (Shift+Enter). */
+  /** Ask for an amount (right-click, Shift+Enter). */
   onPickAmount: () => void;
 }
+
+/** Two clicks on one tile within this window count as a double-click. */
+const DOUBLE_CLICK_MS = 400;
 
 /**
  * One inventory slot drawn like the game's storage windows: 64 px icon on a
@@ -46,6 +50,27 @@ export function ItemTile({
     .filter(Boolean)
     .join("\n");
 
+  // Double-clicks are timed from plain clicks rather than read from the
+  // browser's dblclick event: an embedded host may never report a click
+  // count of 2, and listening to both would fire twice where it does.
+  const lastClick = useRef(0);
+  function onClick() {
+    const now = Date.now();
+    if (now - lastClick.current <= DOUBLE_CLICK_MS) {
+      lastClick.current = 0;
+      onMoveAll();
+    } else {
+      lastClick.current = now;
+    }
+  }
+
+  // Right-click is the amount picker that needs no modifier key, in case a
+  // host drops Shift from mouse events.
+  function onContextMenu(event: MouseEvent) {
+    event.preventDefault();
+    onPickAmount();
+  }
+
   function onKeyDown(event: KeyboardEvent) {
     if (!movable || event.key !== "Enter") return;
     event.preventDefault();
@@ -59,7 +84,8 @@ export function ItemTile({
       title={tooltip}
       tabIndex={movable ? 0 : undefined}
       onPointerDown={movable ? onPointerDown : undefined}
-      onDoubleClick={movable ? onMoveAll : undefined}
+      onClick={movable ? onClick : undefined}
+      onContextMenu={movable ? onContextMenu : undefined}
       onKeyDown={onKeyDown}
     >
       <div className="tile-plate">

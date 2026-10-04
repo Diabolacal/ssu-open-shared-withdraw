@@ -88,7 +88,7 @@ export function fetchDemoUnitState(): UnitState {
       ownerCharacterId: "0xdem00wner",
     },
     main: bucket(store.main, 20_000_000),
-    own: bucket(store.own, 3_000_000),
+    own: bucket(store.own, 2_500_000),
   };
 }
 

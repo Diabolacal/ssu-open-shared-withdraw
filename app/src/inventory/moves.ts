@@ -79,7 +79,9 @@ export function panelTiles(
 /**
  * Stage `amount` of a type moving out of `from`. The result is clamped to
  * what actually exists: never take more than shared storage holds nor share
- * more than your items hold.
+ * more than your items hold. Putting a ghost back (`ghost`) only ever undoes:
+ * it stops at zero rather than flipping into a move the other way (its
+ * amount may be stale if a refresh shrank the staged move meanwhile).
  */
 export function stageMove(
   pending: PendingMoves,
@@ -87,9 +89,11 @@ export function stageMove(
   from: PanelId,
   amount: number,
   limits: { shared: number; own: number },
+  ghost = false,
 ): PendingMoves {
   const current = pending.get(typeId) ?? 0;
-  const raw = from === "shared" ? current + amount : current - amount;
+  let raw = from === "shared" ? current + amount : current - amount;
+  if (ghost) raw = from === "shared" ? Math.min(raw, 0) : Math.max(raw, 0);
   const next = Math.min(Math.max(raw, -limits.own), limits.shared);
   const result = new Map(pending);
   if (next === 0) result.delete(typeId);
@@ -143,4 +147,15 @@ export function pendingVolumeDelta(
     delta += (incoming(panel, moved) - outgoing(panel, moved)) * volume;
   }
   return delta;
+}
+
+/** Volume staged to arrive in a panel (ignores what is staged to leave). */
+export function pendingVolumeIn(
+  panel: PanelId,
+  pending: PendingMoves,
+  volumeOf: (typeId: number) => number,
+): number {
+  let total = 0;
+  for (const [typeId, moved] of pending) total += incoming(panel, moved) * volumeOf(typeId);
+  return total;
 }
