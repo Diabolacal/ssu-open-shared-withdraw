@@ -6,31 +6,27 @@ import {
   CLAIM_PACKAGE_ID,
   isConfiguredPackageId,
   normalizeTypeName,
-  VOLUME_SCALE,
 } from "./config";
-import { applyDemoAction, demoCharacter, DEMO_TYPE_NAMES } from "./demo";
-import { ItemTable } from "./ItemTable";
+import { applyDemoMoves, demoCharacter } from "./demo";
+import type { MoveSummary, StockEntry } from "./inventory/moves";
+import { SharedInventory } from "./inventory/SharedInventory";
 import { compactAddress } from "./objectReaders";
 import { OwnerNotice } from "./OwnerNotice";
-import { StatusStrip } from "./StatusStrip";
 import {
   buildAuthorizeTx,
-  buildPutTx,
+  buildMoveTx,
   buildRevokeTx,
-  buildTakeTx,
   signAndExecute,
 } from "./transactions";
 import type { DAppKitSigner, SmartObjectState, StatusState } from "./types";
-import { primeTypeNames, useTypeNames } from "./typeNames";
+import { useTypeNames } from "./typeNames";
 import { readUrlContext } from "./urlContext";
 import { usePlayerCharacter } from "./usePlayerCharacter";
 import { useUnitId } from "./useUnitId";
 import { useUnitState } from "./useUnitState";
 import type { Transaction } from "@mysten/sui/transactions";
 
-interface ShelfEntry {
-  typeId: number;
-  quantity: number;
+interface ShelfEntry extends StockEntry {
   mainQuantity: number;
   openQuantity: number;
 }
@@ -55,12 +51,6 @@ function friendlyError(raw: string): string {
   return raw.length > 140 ? `${raw.slice(0, 140)}…` : raw;
 }
 
-function formatM3(units: number): string {
-  return (units / VOLUME_SCALE).toLocaleString("en-US", {
-    maximumFractionDigits: 2,
-  });
-}
-
 // The in-game browser sometimes reopens the dApp without its query string;
 // remembering the last unit gives players a one-click way back in.
 const LAST_UNIT_KEY = "ssu-shared:last-unit";
@@ -77,7 +67,6 @@ function readLastUnit(): { id?: string; name?: string } | undefined {
 function App() {
   const urlContext = useMemo(readUrlContext, []);
   const demo = urlContext.demo;
-  if (demo) primeTypeNames(DEMO_TYPE_NAMES);
 
   const smartObject = useSmartObject() as SmartObjectState;
   const { hasEveVault, handleConnect } = useConnection();
@@ -123,6 +112,7 @@ function App() {
       byType.set(entry.typeId, {
         typeId: entry.typeId,
         quantity: entry.quantity,
+        volume: entry.volume,
         mainQuantity: entry.quantity,
         openQuantity: 0,
       });
@@ -136,6 +126,7 @@ function App() {
         byType.set(entry.typeId, {
           typeId: entry.typeId,
           quantity: entry.quantity,
+          volume: entry.volume,
           mainQuantity: 0,
           openQuantity: entry.quantity,
         });
@@ -198,6 +189,8 @@ function App() {
     doneMessage: string;
     build: () => Transaction;
     simulate?: () => Promise<void>;
+    /** Runs once the transaction has gone through, before the re-read. */
+    afterExecute?: () => void;
   }) {
     try {
       if (demo && input.simulate) {
@@ -212,6 +205,7 @@ function App() {
         });
         await signAndExecute(dAppKit, tx);
       }
+      input.afterExecute?.();
       await refetch();
       settleStatus({ state: "done", message: input.doneMessage }, 9000);
     } catch (cause) {
@@ -224,39 +218,35 @@ function App() {
     }
   }
 
-  function take(typeId: number, quantity: number) {
-    const entry = shelf.find((candidate) => candidate.typeId === typeId);
-    if (!entry || !unit || !character) return;
-    const mainQuantity = Math.min(quantity, entry.mainQuantity);
-    const openQuantity = quantity - mainQuantity;
-    void runTx({
-      doneMessage:
-        "Done. Drag the items from the Storage Unit panel into your inventory.",
-      build: () =>
-        buildTakeTx({
-          storageUnitId: unit.id,
-          characterId: character.id,
-          typeId: String(typeId),
-          mainQuantity,
-          openQuantity,
-        }),
-      simulate: () => applyDemoAction("take", typeId, quantity),
+  /** Every staged take and share, in one transaction. */
+  async function commitMoves(moves: MoveSummary, clearStaged: () => void) {
+    if (!unit || !character) return;
+    const takes = moves.takes.map(({ typeId, quantity }) => {
+      // Drain the main hangar first; anything beyond comes from leftovers an
+      // older version of this dApp parked in the open inventory.
+      const entry = shelf.find((candidate) => candidate.typeId === typeId);
+      const mainQuantity = Math.min(quantity, entry?.mainQuantity ?? 0);
+      return { typeId: String(typeId), mainQuantity, openQuantity: quantity - mainQuantity };
     });
-  }
-
-  function share(typeId: number, quantity: number) {
-    if (!unit || !character?.ownerCapId) return;
-    void runTx({
-      doneMessage: "Shared. The items are now in shared storage for anyone to take.",
+    const shares = moves.shares.map(({ typeId, quantity }) => ({
+      typeId: String(typeId),
+      quantity,
+    }));
+    await runTx({
+      doneMessage:
+        takes.length > 0
+          ? "Done. Open the unit in game and drag your items into your inventory."
+          : "Shared. Anyone can take them now.",
       build: () =>
-        buildPutTx({
+        buildMoveTx({
           storageUnitId: unit.id,
           characterId: character.id,
-          characterOwnerCapId: character.ownerCapId!,
-          typeId: String(typeId),
-          quantity,
+          characterOwnerCapId: character.ownerCapId,
+          takes,
+          shares,
         }),
-      simulate: () => applyDemoAction("put", typeId, quantity),
+      simulate: () => applyDemoMoves(moves.takes, moves.shares),
+      afterExecute: clearStaged,
     });
   }
 
@@ -309,7 +299,27 @@ function App() {
     }
   }, [unit?.id, unit?.name, demo]);
 
-  const shelfCapacity = state?.main;
+  let hint =
+    "Drag items between the panels. Hold Shift to pick an amount. Double-click moves a whole stack.";
+  if (!connected) {
+    hint = hasEveVault
+      ? "Connect to take or share items."
+      : "Open this in game, or install EVE Vault, to take or share items.";
+  } else if (unit && !authorized) {
+    hint = "Read only until the owner enables shared access.";
+  } else if (unit?.online === false) {
+    hint = "This unit is offline.";
+  } else if (isOwner === true) {
+    hint = "You own this unit: move items in and out in game. Everything in it is shared.";
+  } else if (!character) {
+    hint = "Finding your character…";
+  }
+
+  const ownEmpty = !connected
+    ? "Connect to see your items in this unit."
+    : isOwner === true
+      ? "Items you put in this unit in game go straight into shared storage."
+      : "Drag items here to take them. To share something, put it in this unit in game first and it shows up here.";
 
   return (
     <main className="shell">
@@ -400,72 +410,32 @@ function App() {
         />
       )}
 
-      <section className="panel">
-        <div className="panel-title">Shared items</div>
-        <ItemTable
-          entries={shelfSorted}
-          names={names}
-          action={
-            canTake && isOwner !== true
-              ? { label: "Take", onAction: take }
+      {unit && (
+        <SharedInventory
+          shared={shelfSorted}
+          own={ownSorted}
+          sharedBucket={
+            state?.main
+              ? { used: state.main.usedCapacity, max: state.main.maxCapacity }
               : undefined
           }
-          busy={busy}
-          emptyMessage={
-            loading && !state
-              ? "Reading the unit…"
-              : "Nothing in shared storage yet."
+          ownBucket={
+            state?.own
+              ? { used: state.own.usedCapacity, max: state.own.maxCapacity }
+              : undefined
           }
+          nameOf={(typeId) => names[typeId] ?? `Item Type ${typeId}`}
+          canTake={canTake && isOwner !== true}
+          canShare={canShare}
+          busy={busy}
+          status={status}
+          hint={hint}
+          sharedEmpty={
+            loading && !state ? "Reading the unit…" : "Nothing in shared storage yet."
+          }
+          ownEmpty={ownEmpty}
+          onCommit={commitMoves}
         />
-        {shelfCapacity && shelfCapacity.maxCapacity > 0 && (
-          <div className="capbar">
-            <div
-              className="capbar-fill"
-              style={{
-                width: `${Math.min(
-                  (shelfCapacity.usedCapacity / shelfCapacity.maxCapacity) * 100,
-                  100,
-                )}%`,
-              }}
-            />
-            <span className="capbar-label">
-              {formatM3(shelfCapacity.usedCapacity)} /{" "}
-              {formatM3(shelfCapacity.maxCapacity)} m3
-            </span>
-          </div>
-        )}
-        {isOwner === true && (
-          <p className="hint">
-            You own this unit: drag items in or out directly in the Storage
-            Unit panel. Everything in it is shared.
-          </p>
-        )}
-        {connected && !authorized && unit && isOwner !== true && (
-          <p className="hint">Read-only until the owner enables shared access.</p>
-        )}
-      </section>
-
-      {(isOwner !== true || ownEntries.length > 0) && (
-        <section className="panel">
-          <div className="panel-title">Your items in this unit</div>
-          <ItemTable
-            entries={ownSorted}
-            names={names}
-            action={canShare ? { label: "Share", onAction: share } : undefined}
-            busy={busy}
-            emptyMessage={
-              connected
-                ? "Nothing waiting. To add items: drag them into the Storage Unit panel, then share them here."
-                : "Connect to see your items in this unit."
-            }
-          />
-          {ownEntries.length > 0 && (
-            <p className="hint">
-              These are only visible to you. Drag them to your inventory in the
-              Storage Unit panel, or share them into shared storage.
-            </p>
-          )}
-        </section>
       )}
 
       {authorized && isOwner === true && (
@@ -488,7 +458,9 @@ function App() {
         </details>
       )}
 
-      <StatusStrip status={status} />
+      {!unit && status.state !== "idle" && (
+        <div className={`notice status-${status.state}`}>{status.message}</div>
+      )}
     </main>
   );
 }

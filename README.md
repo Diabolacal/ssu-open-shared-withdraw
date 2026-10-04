@@ -7,19 +7,20 @@ principle: *the storage unit's main hangar IS the shared shelf.*
 - **Owner**: drags items in and out of the unit in game, exactly as normal.
   Zero dApp interaction to stock or reclaim. One-time "Enable shared access"
   click authorizes the extension.
-- **Anyone else**: sees everything in the unit listed in the behavior panel
-  (NAME / AMOUNT / ID, like the game's default view). Click a row → quantity
-  stepper → **Take** → the items land in their own slot ("STORAGE UNIT" panel
+- **Anyone else**: sees the unit as two storage windows drawn like the
+  game's own inventory (item icons, count badges, capacity bars): shared
+  storage on top, their own items in this unit below. Drag a stack down to
+  take it (hold Shift to pick an amount, or double-click for the whole
+  stack); staged moves show as ghost tiles until **Take all** sends them all
+  in one transaction. The items land in their own slot ("STORAGE UNIT" panel
   in game) → drag them into their inventory.
 - **Depositing**: drag items into the STORAGE UNIT panel in game (they go to
-  your own slot), then press **Share** in the dApp to move them onto the
-  shelf.
+  your own slot), then press **Share all** in the dApp, or drag individual
+  stacks up, to move them into shared storage. One transaction either way.
 
 Live deployment: <https://ssu-open-shared-withdraw.pages.dev>
 (`?demo=1` renders canned data with simulated transactions — no wallet or
 chain access needed; useful for previews and screenshots.)
-
-![At rest](docs/screenshots/shot-demo-rest.png)
 
 ## How it works on chain
 
@@ -90,6 +91,34 @@ the world API (`/v2/types/{id}`) as a fallback for ids the map lacks. The
 world API stopped listing new content in mid-2026, so the bundled map is what
 keeps newer items from rendering as "type 95988".
 
+### Item icons
+
+The tiles use the game client's own 64 px inventory icons. They are CCP's art,
+so they are **not committed**: `app/public/icons.json` and
+`app/public/icons/` are gitignored and generated from a local EVE Frontier
+client before any build that gets deployed. Without them the app still works
+and draws blank tiles; `vite build` warns and `scripts/sync-to-efmap.mjs`
+refuses to run (set `ALLOW_NO_ICONS=1` to override).
+
+Format, for anyone producing them from their own client:
+
+- `icons/<hash>.png`: one file per distinct icon, named by the first 12 hex
+  characters of the file's MD5 (content-addressed, safe to cache forever).
+- `icons.json`: `{ "schema": 1, "clientBuild": <build>, "icons": { "<typeId>": "<hash>" } }`.
+
+Resolution follows the client: `type.iconID` → `iconIDs[iconID].iconFile`;
+types without one (ships, deployables) use their pre-rendered hull icon,
+`graphicIDs[graphicID].iconInfo.folder` + `/<graphicID>_64.png`.
+
+### Moving items
+
+Every staged move, takes and shares together, goes out as ONE programmable
+transaction (`buildMoveTx` in `app/src/transactions.ts`): one signature, one
+gas charge. Shares borrow the character's OwnerCap once and pass it to every
+`put`. Drag and drop uses plain pointer events rather than the HTML5
+drag-and-drop API, which off-screen browser hosts like the in-game one do not
+reliably support.
+
 ```powershell
 pnpm install
 pnpm --dir app build          # tsc + vite build
@@ -127,6 +156,8 @@ custom dApp URLs on its own.
 
 ## Screenshots
 
+These show the earlier list view; the icon grid replaced it.
+
 | | |
 |---|---|
 | ![Row controls](docs/screenshots/shot-demo-controls.png) | ![After take](docs/screenshots/shot-demo-taken.png) |
@@ -157,5 +188,8 @@ third-party unit (read-only, foreign extension notice).
 
 ## Still to verify in game
 
+- Dragging tiles between the two storage windows inside the in-game browser
+  (pointer-event drag, verified in desktop Chrome; double-click is the
+  fallback if a host swallows drags).
 - The full visitor flow (take + share) with a second character, and how
   promptly the game's STORAGE UNIT panel reflects a take.

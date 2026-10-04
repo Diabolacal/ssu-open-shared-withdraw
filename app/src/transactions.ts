@@ -6,75 +6,84 @@ function claimTarget(functionName: string): string {
   return `${CLAIM_PACKAGE_ID}::${CLAIM_MODULE}::${functionName}`;
 }
 
-/**
- * Take items from the shared shelf into the caller's own slot. The shelf is
- * the main hangar; `openQuantity` drains any leftovers that older versions of
- * this dApp parked in the open inventory, in the same transaction.
- */
-export function buildTakeTx(input: {
-  storageUnitId: string;
-  characterId: string;
+export interface TakeLine {
   typeId: string;
+  /** Taken from the main hangar (the shared storage). */
   mainQuantity: number;
+  /** Drained from leftovers older versions of this dApp parked in the open inventory. */
   openQuantity: number;
-}): Transaction {
-  const tx = new Transaction();
-  if (input.mainQuantity > 0) {
-    tx.moveCall({
-      target: claimTarget("take"),
-      arguments: [
-        tx.object(input.storageUnitId),
-        tx.object(input.characterId),
-        tx.pure.u64(BigInt(input.typeId)),
-        tx.pure.u32(input.mainQuantity),
-      ],
-    });
-  }
-  if (input.openQuantity > 0) {
-    tx.moveCall({
-      target: claimTarget("claim_from_open"),
-      arguments: [
-        tx.object(input.storageUnitId),
-        tx.object(input.characterId),
-        tx.pure.u64(BigInt(input.typeId)),
-        tx.pure.u32(input.openQuantity),
-      ],
-    });
-  }
-  return tx;
 }
 
-/** Move items from the caller's own slot onto the shared shelf (main hangar). */
-export function buildPutTx(input: {
-  storageUnitId: string;
-  characterId: string;
-  characterOwnerCapId: string;
+export interface ShareLine {
   typeId: string;
   quantity: number;
+}
+
+/**
+ * Every staged move in ONE transaction (one signature, one gas charge).
+ * Shares run first so a full personal slot frees room before takes land.
+ * The character's OwnerCap is borrowed once and passed by reference to every
+ * `put`, then returned; `take` needs no cap.
+ */
+export function buildMoveTx(input: {
+  storageUnitId: string;
+  characterId: string;
+  characterOwnerCapId?: string;
+  takes: TakeLine[];
+  shares: ShareLine[];
 }): Transaction {
   const tx = new Transaction();
-  const [ownerCap, receipt] = tx.moveCall({
-    target: `${WORLD_PACKAGE_ID}::character::borrow_owner_cap`,
-    typeArguments: [`${WORLD_PACKAGE_ID}::character::Character`],
-    arguments: [tx.object(input.characterId), tx.object(input.characterOwnerCapId)],
-  });
 
-  tx.moveCall({
-    target: claimTarget("put"),
-    arguments: [
-      tx.object(input.storageUnitId),
-      tx.object(input.characterId),
-      ownerCap,
-      tx.pure.u64(BigInt(input.typeId)),
-      tx.pure.u32(input.quantity),
-    ],
-  });
+  if (input.shares.length > 0) {
+    if (!input.characterOwnerCapId) throw new Error("Character not ready to share yet.");
+    const [ownerCap, receipt] = tx.moveCall({
+      target: `${WORLD_PACKAGE_ID}::character::borrow_owner_cap`,
+      typeArguments: [`${WORLD_PACKAGE_ID}::character::Character`],
+      arguments: [tx.object(input.characterId), tx.object(input.characterOwnerCapId)],
+    });
+    for (const share of input.shares) {
+      tx.moveCall({
+        target: claimTarget("put"),
+        arguments: [
+          tx.object(input.storageUnitId),
+          tx.object(input.characterId),
+          ownerCap,
+          tx.pure.u64(BigInt(share.typeId)),
+          tx.pure.u32(share.quantity),
+        ],
+      });
+    }
+    tx.moveCall({
+      target: `${WORLD_PACKAGE_ID}::character::return_owner_cap`,
+      typeArguments: [`${WORLD_PACKAGE_ID}::character::Character`],
+      arguments: [tx.object(input.characterId), ownerCap, receipt],
+    });
+  }
 
-  tx.moveCall({
-    target: `${WORLD_PACKAGE_ID}::character::return_owner_cap`,
-    typeArguments: [`${WORLD_PACKAGE_ID}::character::Character`],
-    arguments: [tx.object(input.characterId), ownerCap, receipt],
-  });
+  for (const take of input.takes) {
+    if (take.mainQuantity > 0) {
+      tx.moveCall({
+        target: claimTarget("take"),
+        arguments: [
+          tx.object(input.storageUnitId),
+          tx.object(input.characterId),
+          tx.pure.u64(BigInt(take.typeId)),
+          tx.pure.u32(take.mainQuantity),
+        ],
+      });
+    }
+    if (take.openQuantity > 0) {
+      tx.moveCall({
+        target: claimTarget("claim_from_open"),
+        arguments: [
+          tx.object(input.storageUnitId),
+          tx.object(input.characterId),
+          tx.pure.u64(BigInt(take.typeId)),
+          tx.pure.u32(take.openQuantity),
+        ],
+      });
+    }
+  }
   return tx;
 }
 

@@ -10,3 +10,6 @@ app/preview*.png
 app/remote-smoke*.png
 move/ssu_open_claim/build/
 app/dist-efmap/
+# Item icons are the game's own art: generated from a local client, never committed.
+app/public/icons/
+app/public/icons.json

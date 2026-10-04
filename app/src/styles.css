@@ -2,7 +2,11 @@
 @import "@fontsource/ibm-plex-mono/500.css";
 @import "@fontsource/ibm-plex-mono/600.css";
 
-/* In-game BEHAVIOR panel look: monochrome, squared, hairline borders. */
+/*
+ * Chrome (top bar, notices, buttons) keeps the in-game BEHAVIOR panel look:
+ * monochrome, squared, hairline borders. The two storage windows copy the
+ * game's own inventory windows: warm dark plates, black count badges.
+ */
 :root {
   --bg: #070707;
   --panel: #0b0b0b;
@@ -12,6 +16,22 @@
   --bright: #ffffff;
   --muted: #9c9c9c;
   --dim: #6e6e6e;
+
+  /* Sampled from the game's storage windows (opaque equivalents of its
+     translucent brown over the nebula). */
+  --inv-bg: #22120a;
+  --inv-edge: #4b3424;
+  --inv-head-edge: #6a5644;
+  --inv-tile: #3a2618;
+  --inv-tile-hover: #4a3322;
+  --inv-text: #ddd4cb;
+  --inv-name: #bfb5ab;
+  --inv-dim: #8a7d72;
+  --inv-search: #302722;
+  --inv-cap-track: #1b0e07;
+  --inv-cap-fill: #4a3d33;
+  --inv-accent: #d77a3a;
+  --inv-staged: #f0c9a4;
 
   color: var(--text);
   background: var(--bg);
@@ -27,15 +47,22 @@
 body {
   margin: 0;
   min-width: 300px;
-  min-height: 100vh;
   background: var(--bg);
 }
 
+/* Fills the viewport so the two storage windows can split its height. */
 .shell {
-  width: min(820px, 100%);
-  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  width: min(900px, 100%);
+  height: 100vh;
   margin: 0 auto;
-  padding: 10px 14px 20px;
+  padding: 10px 14px 12px;
+  overflow-y: auto;
+}
+
+.shell > * {
+  flex: none;
 }
 
 p {
@@ -91,129 +118,309 @@ p {
   color: #d8a0a0;
 }
 
-/* ===== panels ===== */
+/* ===== storage windows ===== */
 
-.panel {
-  margin-top: 14px;
-  padding: 10px 12px 12px;
-  border: 1px solid var(--line-strong);
-  background: var(--panel);
+.shell > .inventory {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 460px;
+  margin-top: 12px;
 }
 
-.panel-title {
-  margin: -10px -12px 10px;
-  padding: 7px 12px;
-  border-bottom: 1px solid var(--line);
-  color: var(--text);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-size: 12px;
-  font-weight: 600;
+.inv {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 6px;
+  border: 1px solid var(--inv-edge);
+  background: var(--inv-bg);
 }
 
-/* ===== item table ===== */
-
-.table {
-  width: 100%;
+/* Shared storage gets two thirds of the height, your items one third. */
+.inv-shared {
+  flex: 2 1 0;
+  min-height: 230px;
 }
 
-.table-head,
-.row-line {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 104px 72px;
-  gap: 12px;
-  align-items: baseline;
-  padding: 3px 6px;
+.inv-own {
+  flex: 1 1 0;
+  min-height: 160px;
 }
 
-.table-head span,
-.table-head button.sort {
-  color: var(--dim);
+.inv.drop-ready {
+  border-color: #7a5a40;
+}
+
+.inv.drop-hover {
+  border-color: var(--inv-accent);
+  box-shadow: inset 0 0 0 1px var(--inv-accent);
+}
+
+.inv-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 3px 3px 9px;
+  border: 1px solid var(--inv-head-edge);
+}
+
+.inv-title {
+  flex: 1;
+  overflow: hidden;
+  color: var(--inv-text);
+  text-overflow: ellipsis;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  font-size: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
-/* Header sorts read exactly like the plain labels until hovered. */
-.table-head button.sort {
+.inv-search {
+  width: 170px;
+  min-width: 0;
   border: none;
-  background: transparent;
-  padding: 0;
-  text-align: left;
-  cursor: pointer;
-}
-
-.table-head button.sort:hover:not(:disabled) {
-  border: none;
-  background: transparent;
-  color: var(--bright);
-}
-
-.table-head {
-  margin-bottom: 4px;
-}
-
-.table-filter {
-  padding: 0 6px 6px;
-}
-
-.table-filter input {
-  width: 100%;
-  border: 1px solid var(--line);
-  padding: 4px 8px;
-  color: var(--bright);
-  background: transparent;
+  padding: 3px 8px;
+  color: var(--inv-text);
+  background: var(--inv-search);
+  font: inherit;
   font-size: 12px;
 }
 
-.table-filter input:focus {
-  outline: 1px solid var(--bright);
+.inv-search::placeholder {
+  color: var(--inv-dim);
+}
+
+.inv-search:focus {
+  outline: 1px solid var(--inv-accent);
   outline-offset: 0;
 }
 
-.table-filter input::placeholder {
-  color: var(--dim);
+.inv-body {
+  flex: 1;
+  min-height: 0;
+  padding: 8px 2px 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-color: #675952 transparent;
+  scrollbar-width: thin;
 }
 
-.row-line {
-  padding-top: 4px;
-  padding-bottom: 4px;
+.inv-empty {
+  padding: 4px 6px;
+  color: var(--inv-dim);
+  font-size: 12px;
 }
 
-.row-line.actionable {
-  cursor: pointer;
+.inv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 76px);
+  gap: 6px 4px;
 }
 
-.row-line.actionable:hover {
-  background: rgba(255, 255, 255, 0.05);
+/* ===== item tiles ===== */
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 76px;
+  outline: none;
+  user-select: none;
 }
 
-.row.open {
-  outline: 1px solid var(--line-strong);
-  background: rgba(255, 255, 255, 0.03);
+.tile-plate {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  background: var(--inv-tile);
 }
 
-.cell-name {
-  overflow-wrap: anywhere;
-  color: var(--bright);
+.tile-plate img,
+.drag-ghost img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  pointer-events: none;
+  -webkit-user-drag: none;
 }
 
-.cell-amount,
-.cell-id {
-  color: var(--text);
+.tile-noicon {
+  width: 36px;
+  height: 36px;
+  border: 1px dashed #5a4636;
+}
+
+.tile-qty {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  padding: 0 3px;
+  color: #ffffff;
+  background: #000000;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 15px;
   font-variant-numeric: tabular-nums;
 }
 
-.cell-id {
+/* Wraps mid-word and clips at two lines with no ellipsis, like the game
+   ("Irradiat/ed"). The full name is in the tile's tooltip. */
+.tile-name {
+  width: 74px;
+  max-height: 34px;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--inv-name);
+  font-size: 13px;
+  line-height: 17px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.tile.movable {
+  cursor: grab;
+}
+
+.tile.movable:hover .tile-plate {
+  background: var(--inv-tile-hover);
+  box-shadow: inset 0 0 0 1px #8a6f58;
+}
+
+.tile:focus-visible .tile-plate {
+  outline: 1px solid var(--inv-accent);
+}
+
+/* Staged arrivals: dashed outline, faded art, warm count. */
+.tile.ghost .tile-plate {
+  background: transparent;
+  outline: 1px dashed #b98a62;
+  outline-offset: -1px;
+}
+
+.tile.ghost img {
+  opacity: 0.45;
+}
+
+.tile.ghost .tile-qty {
+  color: var(--inv-staged);
+}
+
+.tile.ghost .tile-name {
+  color: var(--inv-dim);
+}
+
+/* Real stock with its whole stack staged to leave. */
+.tile.departing {
+  opacity: 0.3;
+}
+
+.inventory.dragging,
+.inventory.dragging .tile {
+  cursor: grabbing;
+}
+
+.drag-ghost {
+  position: fixed;
+  z-index: 50;
+  width: 64px;
+  height: 64px;
+  background: var(--inv-tile);
+  opacity: 0.85;
+  pointer-events: none;
+  transform: translate(-32px, -32px);
+}
+
+.drag-ghost.will-drop {
+  outline: 1px solid var(--inv-accent);
+}
+
+.drag-ghost .tile-noicon {
+  display: block;
+  margin: 13px;
+}
+
+/* ===== capacity bar (game style) ===== */
+
+.capbar {
+  position: relative;
+  flex: none;
+  height: 20px;
+  margin-top: 6px;
+  overflow: hidden;
+  background: var(--inv-cap-track);
+}
+
+.capbar-fill {
+  height: 100%;
+  background: var(--inv-cap-fill);
+}
+
+.capbar-staged {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(215, 122, 58, 0.5) 0 4px,
+    rgba(215, 122, 58, 0.22) 4px 8px
+  );
+}
+
+.capbar.over .capbar-staged {
+  background: rgba(200, 70, 60, 0.65);
+}
+
+.capbar-label {
+  position: absolute;
+  top: 0;
+  left: 7px;
+  color: var(--inv-text);
+  font-size: 12px;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.capbar-next {
+  color: var(--inv-staged);
+}
+
+/* ===== move bar (between the windows) ===== */
+
+.movebar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 38px;
+  padding: 4px 6px 4px 10px;
+  border: 1px solid var(--line-strong);
+  background: #101010;
+}
+
+.movebar-text {
+  flex: 1;
+  color: var(--bright);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.movebar-text.is-hint {
   color: var(--muted);
 }
 
-.row-controls {
+.movebar-actions {
   display: flex;
-  align-items: center;
+  flex: none;
   gap: 6px;
-  padding: 6px;
-  border-top: 1px solid var(--line);
 }
 
 /* ===== controls ===== */
@@ -249,14 +456,13 @@ button.step {
 }
 
 button.action {
-  margin-left: auto;
   padding: 4px 16px;
   font-weight: 600;
 }
 
 button.action.wide {
-  margin: 8px 0 0;
   width: 100%;
+  margin: 8px 0 0;
   padding: 8px 16px;
 }
 
@@ -265,9 +471,50 @@ button.refresh {
   line-height: 1;
 }
 
-.row-controls input {
-  width: 92px;
-  border: 1px solid var(--line-strong);
+/* ===== amount dialog ===== */
+
+.dialog-backdrop {
+  position: fixed;
+  z-index: 60;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.dialog {
+  width: min(320px, 100%);
+  padding: 12px;
+  border: 1px solid var(--inv-head-edge);
+  background: #1d110a;
+}
+
+.dialog-title {
+  color: var(--inv-text);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.dialog-item {
+  margin: 4px 0 10px;
+  color: var(--inv-name);
+  font-size: 12px;
+}
+
+.dialog-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dialog-row input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--inv-head-edge);
   padding: 4px 8px;
   color: var(--bright);
   background: var(--bg);
@@ -276,34 +523,16 @@ button.refresh {
   text-align: right;
 }
 
-.row-controls input:focus {
-  outline: 1px solid var(--bright);
+.dialog-row input:focus {
+  outline: 1px solid var(--inv-accent);
   outline-offset: 0;
 }
 
-/* ===== capacity bar (game style) ===== */
-
-.capbar {
-  position: relative;
-  margin-top: 10px;
-  height: 18px;
-  border: 1px solid var(--line);
-  background: #141414;
-}
-
-.capbar-fill {
-  height: 100%;
-  background: rgba(255, 255, 255, 0.22);
-}
-
-.capbar-label {
-  position: absolute;
-  top: 0;
-  right: 6px;
-  color: var(--text);
-  font-size: 11px;
-  line-height: 16px;
-  font-variant-numeric: tabular-nums;
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 /* ===== notices & status ===== */
@@ -324,7 +553,6 @@ button.refresh {
   color: #d8a0a0;
 }
 
-.empty,
 .hint {
   margin-top: 6px;
   padding: 2px 6px;
@@ -348,23 +576,12 @@ button.refresh {
   margin-top: 8px;
 }
 
-.status {
-  position: sticky;
-  bottom: 10px;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 14px;
-  padding: 9px 12px;
-  border: 1px solid var(--line-strong);
-  color: var(--bright);
-  background: #101010;
-  overflow-wrap: anywhere;
+.status-failed {
+  color: #d8a0a0;
 }
 
-.status-failed {
+.notice.status-failed {
   border-color: #7a5a5a;
-  color: #d8a0a0;
 }
 
 .status-awaiting-signature::after,
@@ -381,9 +598,7 @@ button.refresh {
 }
 
 @media (max-width: 560px) {
-  .table-head,
-  .row-line {
-    grid-template-columns: minmax(0, 1fr) 84px 60px;
-    gap: 8px;
+  .inv-search {
+    width: 110px;
   }
 }

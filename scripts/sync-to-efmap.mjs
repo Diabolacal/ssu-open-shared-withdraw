@@ -20,6 +20,15 @@ if (!existsSync(path.join(efmapDir, "eve-frontier-map"))) {
   process.exit(1);
 }
 
+// The production copy must carry the item icons (gitignored game art).
+if (!existsSync(path.join(appDir, "public", "icons.json")) && !process.env.ALLOW_NO_ICONS) {
+  console.error(
+    "app/public/icons.json is missing: generate the item icons from the game client first " +
+      "(or set ALLOW_NO_ICONS=1 to sync a build with blank tiles).",
+  );
+  process.exit(1);
+}
+
 console.log("building with base=/storage/ …");
 execSync("pnpm build:efmap", { cwd: appDir, stdio: "inherit" });
 
