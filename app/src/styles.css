@@ -200,6 +200,7 @@ p {
 }
 
 .inv-body {
+  position: relative;
   flex: 1;
   min-height: 0;
   padding: 8px 2px 4px;
@@ -207,6 +208,25 @@ p {
   overflow-y: auto;
   scrollbar-color: #675952 transparent;
   scrollbar-width: thin;
+  user-select: none;
+}
+
+.inv-body:focus {
+  outline: none;
+}
+
+.inv-body:focus-visible {
+  outline: 1px solid var(--inv-accent);
+  outline-offset: -1px;
+}
+
+/* Box selection, drawn in the window's scrolled content space. */
+.marquee {
+  position: absolute;
+  z-index: 2;
+  border: 1px solid var(--inv-accent);
+  background: rgba(215, 122, 58, 0.14);
+  pointer-events: none;
 }
 
 .inv-empty {
@@ -297,6 +317,17 @@ p {
   outline: 1px solid var(--inv-accent);
 }
 
+/* Selected tiles move together when one of them is dragged. */
+.tile.selected .tile-plate,
+.tile.selected.movable:hover .tile-plate {
+  background: #5a3a22;
+  box-shadow: inset 0 0 0 1px var(--inv-accent);
+}
+
+.tile.selected .tile-name {
+  color: var(--inv-text);
+}
+
 /* Staged arrivals: dashed outline, faded art, warm count. */
 .tile.ghost .tile-plate {
   background: transparent;
@@ -314,6 +345,16 @@ p {
 
 .tile.ghost .tile-name {
   color: var(--inv-dim);
+}
+
+/* A selected ghost: solid accent edge over the dashed one, so it reads as picked. */
+.tile.ghost.selected .tile-plate {
+  background: rgba(215, 122, 58, 0.18);
+  outline: 1px solid var(--inv-accent);
+}
+
+.tile.ghost.selected .tile-name {
+  color: var(--inv-text);
 }
 
 /* Real stock with its whole stack staged to leave. */
@@ -339,6 +380,17 @@ p {
 
 .drag-ghost.will-drop {
   outline: 1px solid var(--inv-accent);
+}
+
+/* Several stacks in hand: plates fanned out behind the one under the pointer. */
+.drag-ghost.multi {
+  box-shadow:
+    4px 4px 0 -1px var(--inv-tile-hover),
+    8px 8px 0 -2px var(--inv-edge);
+}
+
+.drag-ghost.multi .tile-qty {
+  white-space: nowrap;
 }
 
 .drag-ghost .tile-noicon {

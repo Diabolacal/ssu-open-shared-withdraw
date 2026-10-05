@@ -1,8 +1,11 @@
-import { useMemo, useState } from "react";
-import type { PointerEvent, ReactNode } from "react";
+import { useMemo, useRef, useState } from "react";
+import type { KeyboardEvent, PointerEvent, ReactNode } from "react";
 import { formatMaxM3, formatUsedM3 } from "./format";
 import { ItemTile } from "./ItemTile";
 import type { PanelId, TileModel } from "./moves";
+import { boxSelect, clickSelect, keysIn, NO_SELECTION } from "./selection";
+import type { Selection } from "./selection";
+import { useMarquee } from "./useMarquee";
 import type { DragPayload } from "./useTileDrag";
 
 export interface Capacity {
@@ -30,9 +33,13 @@ interface InventoryPanelProps {
   dropReady: boolean;
   emptyMessage: ReactNode;
   capacity?: Capacity;
+  /** The selection across both panels (only one panel holds it at a time). */
+  selection: Selection;
+  onSelectionChange: (next: Selection) => void;
   onBeginDrag: (event: PointerEvent, payload: DragPayload) => void;
-  onMoveAll: (tile: TileModel) => void;
-  onPickAmount: (tile: TileModel) => void;
+  /** Move these whole tiles to the other panel. */
+  onMoveTiles: (tiles: TileModel[]) => void;
+  onPickAmount: (tile: TileModel, viaKeyboard: boolean) => void;
 }
 
 /** A storage window in the game's style: title bar + search, icon grid, capacity bar. */
@@ -50,11 +57,14 @@ export function InventoryPanel({
   dropReady,
   emptyMessage,
   capacity,
+  selection,
+  onSelectionChange,
   onBeginDrag,
-  onMoveAll,
+  onMoveTiles,
   onPickAmount,
 }: InventoryPanelProps) {
   const [search, setSearch] = useState("");
+  const body = useRef<HTMLDivElement>(null);
 
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -66,12 +76,56 @@ export function InventoryPanel({
     );
   }, [tiles, search, nameOf]);
 
+  // Only tiles that can move right now are selectable, and only visible
+  // ones count: a search never leaves hidden tiles riding along in a drag.
+  const selectable = useMemo(
+    () =>
+      visible.filter(
+        (tile) => !frozen && tile.quantity > 0 && (tile.ghost || canMoveOut),
+      ),
+    [visible, frozen, canMoveOut],
+  );
+  const orderedKeys = useMemo(() => selectable.map((tile) => tile.key), [selectable]);
+  const movableKeys = useMemo(() => new Set(orderedKeys), [orderedKeys]);
+  const selectedKeys = keysIn(selection, id);
+  const picked = selectable.filter((tile) => selectedKeys.has(tile.key));
+
+  /** What moves when `tile` is dragged or sent: the selection if it's in it. */
+  function groupFor(tile: TileModel): TileModel[] {
+    return picked.length > 1 && selectedKeys.has(tile.key) ? picked : [tile];
+  }
+
+  // The selection when a box started, so Ctrl/Shift boxes add to it.
+  const boxBase = useRef<Selection>(NO_SELECTION);
+  const marquee = useMarquee({
+    bodyRef: body,
+    onBox: (hits, additive) => onSelectionChange(boxSelect(boxBase.current, id, hits, additive)),
+    onEmptyClick: (additive) => {
+      if (!additive && selection.panel === id) onSelectionChange(NO_SELECTION);
+    },
+    onCancel: () => onSelectionChange(boxBase.current),
+  });
+
+  function onBodyPointerDown(event: PointerEvent) {
+    if ((event.target as Element).closest(".tile.movable")) return;
+    boxBase.current = selection;
+    marquee.begin(event);
+  }
+
+  function onKeyDown(event: KeyboardEvent) {
+    if (event.target instanceof HTMLInputElement) return;
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
+      event.preventDefault();
+      onSelectionChange({ panel: id, keys: new Set(orderedKeys), anchor: orderedKeys[0] });
+    }
+  }
+
   const classes = ["inv", `inv-${id}`];
   if (dropReady) classes.push("drop-ready");
   if (dropHover) classes.push("drop-hover");
 
   return (
-    <section className={classes.join(" ")} data-drop-panel={id}>
+    <section className={classes.join(" ")} data-drop-panel={id} onKeyDown={onKeyDown}>
       <header className="inv-head">
         <span className="inv-title" title={titleHint}>
           {title}
@@ -85,7 +139,7 @@ export function InventoryPanel({
           onChange={(event) => setSearch(event.target.value)}
         />
       </header>
-      <div className="inv-body">
+      <div className="inv-body" ref={body} tabIndex={0} onPointerDown={onBodyPointerDown}>
         {tiles.length === 0 ? (
           <p className="inv-empty">{emptyMessage}</p>
         ) : visible.length === 0 ? (
@@ -93,7 +147,7 @@ export function InventoryPanel({
         ) : (
           <div className="inv-grid">
             {visible.map((tile) => {
-              const movable = !frozen && tile.quantity > 0 && (tile.ghost || canMoveOut);
+              const movable = movableKeys.has(tile.key);
               return (
                 <ItemTile
                   key={tile.key}
@@ -101,24 +155,42 @@ export function InventoryPanel({
                   name={nameOf(tile.typeId)}
                   iconUrl={iconOf(tile.typeId)}
                   movable={movable}
+                  selected={selectedKeys.has(tile.key)}
                   moveHint={
                     tile.ghost ? "Drag back or double-click to undo. Right-click for an amount." : moveHint
                   }
                   onPointerDown={(event) =>
                     onBeginDrag(event, {
-                      typeId: tile.typeId,
                       from: id,
-                      max: tile.quantity,
-                      ghost: tile.ghost,
+                      items: groupFor(tile).map((t) => ({
+                        typeId: t.typeId,
+                        max: t.quantity,
+                        ghost: t.ghost,
+                      })),
                       iconUrl: iconOf(tile.typeId),
                     })
                   }
-                  onMoveAll={() => onMoveAll(tile)}
-                  onPickAmount={() => onPickAmount(tile)}
+                  onSelect={(modifiers) =>
+                    onSelectionChange(clickSelect(selection, id, tile.key, orderedKeys, modifiers))
+                  }
+                  onMoveAll={() => onMoveTiles(groupFor(tile))}
+                  onPickAmount={(viaKeyboard) => onPickAmount(tile, viaKeyboard)}
                 />
               );
             })}
           </div>
+        )}
+        {marquee.box && (
+          <div
+            className="marquee"
+            style={{
+              left: marquee.box.left,
+              top: marquee.box.top,
+              width: marquee.box.width,
+              height: marquee.box.height,
+            }}
+            aria-hidden="true"
+          />
         )}
       </div>
       {capacity && capacity.max > 0 && <CapacityBar capacity={capacity} />}

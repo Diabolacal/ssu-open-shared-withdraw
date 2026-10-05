@@ -11,13 +11,19 @@ import type { PanelId } from "./moves";
  * anywhere a mouse does.
  */
 
-export interface DragPayload {
+export interface DragItem {
   typeId: number;
-  from: PanelId;
-  /** Most that can move from the dragged tile (its badge count). */
+  /** Most that can move from this tile (its badge count). */
   max: number;
-  /** The dragged tile is a staged arrival being put back. */
+  /** The tile is a staged arrival being put back. */
   ghost: boolean;
+}
+
+export interface DragPayload {
+  from: PanelId;
+  /** One tile, or every selected tile when a selected one is dragged. */
+  items: DragItem[];
+  /** Icon of the tile under the pointer, drawn on the drag ghost. */
   iconUrl?: string;
 }
 
@@ -30,7 +36,10 @@ export interface DragState extends DragPayload {
 
 export interface DropEvent extends DragPayload {
   to: PanelId;
-  /** Shift held at the drop: ask for an amount instead of the whole stack. */
+  /**
+   * Shift held at the drop: ask for an amount instead of the whole stack.
+   * Ignored for several tiles at once, which always move whole.
+   */
   pickAmount: boolean;
 }
 
@@ -42,6 +51,20 @@ function panelAt(x: number, y: number): PanelId | undefined {
   const zone = element?.closest<HTMLElement>("[data-drop-panel]");
   const panel = zone?.dataset.dropPanel;
   return panel === "shared" || panel === "own" ? panel : undefined;
+}
+
+/**
+ * A drag released back over its own tile still ends in a click on it, which
+ * would collapse the selection (or count toward a double-click). Swallow the
+ * click this same release produces; it arrives before the timeout fires.
+ */
+function swallowNextClick() {
+  const swallow = (event: MouseEvent) => {
+    event.stopPropagation();
+    event.preventDefault();
+  };
+  window.addEventListener("click", swallow, { capture: true, once: true });
+  window.setTimeout(() => window.removeEventListener("click", swallow, { capture: true }), 0);
 }
 
 export function useTileDrag(onDrop: (event: DropEvent) => void) {
@@ -93,6 +116,7 @@ export function useTileDrag(onDrop: (event: DropEvent) => void) {
       const current = press.current;
       if (!current) return;
       if (current.active) {
+        swallowNextClick();
         const to = panelAt(event.clientX, event.clientY);
         if (to && to !== current.payload.from) {
           onDropRef.current({ ...current.payload, to, pickAmount: event.shiftKey });
@@ -121,7 +145,8 @@ export function useTileDrag(onDrop: (event: DropEvent) => void) {
 
   /** Call from a tile's onPointerDown. */
   const begin = useCallback((event: ReactPointerEvent, payload: DragPayload) => {
-    if (event.button !== 0 || event.pointerType === "touch" || payload.max <= 0) return;
+    if (event.button !== 0 || event.pointerType === "touch") return;
+    if (payload.items.every((item) => item.max <= 0)) return;
     press.current = {
       payload,
       x: event.clientX,

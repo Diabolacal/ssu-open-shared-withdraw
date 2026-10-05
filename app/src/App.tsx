@@ -318,7 +318,7 @@ function App() {
   }, [unit?.id, unit?.name, demo]);
 
   let hint =
-    "Drag items between the panels. Hold Shift to pick an amount. Double-click moves a whole stack.";
+    "Drag items between the panels. Shift-drag picks an amount, double-click moves a whole stack. Ctrl-click, Shift-click or drag a box to move several at once.";
   if (!connected) {
     hint = hasEveVault
       ? "Connect to take or share items."

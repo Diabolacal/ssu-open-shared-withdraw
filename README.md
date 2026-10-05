@@ -10,9 +10,12 @@ principle: *the storage unit's main hangar IS the shared shelf.*
 - **Anyone else**: sees the unit as two storage windows drawn like the
   game's own inventory (item icons, count badges, capacity bars): shared
   storage on top, their own items in this unit below. Drag a stack down to
-  take it (hold Shift to pick an amount, or double-click for the whole
-  stack); staged moves show as ghost tiles until **Take all** sends them all
-  in one transaction. The items land in their own slot ("STORAGE UNIT" panel
+  take it (hold Shift to pick an amount, typed and confirmed with Enter, or
+  double-click for the whole stack). Ctrl-click, Shift-click or drag a box
+  over empty space to select several stacks, then drag any one of them to
+  move the lot (always whole stacks, Shift is ignored); Ctrl+A selects a
+  whole window and Escape clears. Staged moves show as ghost tiles until
+  **Take all** sends them all in one transaction. The items land in their own slot ("STORAGE UNIT" panel
   in game) → drag them into their inventory.
 - **Depositing**: drag items into the STORAGE UNIT panel in game (they go to
   your own slot), then press **Share all** in the dApp, or drag individual
@@ -191,5 +194,8 @@ third-party unit (read-only, foreign extension notice).
 - Dragging tiles between the two storage windows inside the in-game browser
   (pointer-event drag, verified in desktop Chrome; double-click is the
   fallback if a host swallows drags).
+- Ctrl-click and box selection in the in-game browser (verified in desktop
+  Chrome). The amount box confirms on Enter's key-down rather than by form
+  submission, because the in-game browser was seen not to submit on Enter.
 - The full visitor flow (take + share) with a second character, and how
   promptly the game's STORAGE UNIT panel reflects a take.

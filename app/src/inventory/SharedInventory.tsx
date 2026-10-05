@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { StatusState } from "../types";
 import { useTypeIcons } from "../typeIcons";
@@ -15,8 +15,10 @@ import {
 import type { MoveSummary, PanelId, PendingMoves, StockEntry, TileModel } from "./moves";
 import { MoveBar } from "./MoveBar";
 import { QuantityDialog } from "./QuantityDialog";
+import { NO_SELECTION } from "./selection";
+import type { Selection } from "./selection";
 import { useTileDrag } from "./useTileDrag";
-import type { DropEvent } from "./useTileDrag";
+import type { DragItem, DropEvent } from "./useTileDrag";
 
 interface Bucket {
   used: number;
@@ -47,11 +49,18 @@ interface SharedInventoryProps {
 
 const EMPTY: PendingMoves = new Map();
 
+const asItem = (tile: TileModel): DragItem => ({
+  typeId: tile.typeId,
+  max: tile.quantity,
+  ghost: tile.ghost,
+});
+
 interface AmountPrompt {
   typeId: number;
   from: PanelId;
   max: number;
   ghost: boolean;
+  viaKeyboard?: boolean;
 }
 
 /**
@@ -78,6 +87,7 @@ export function SharedInventory({
   const iconOf = useTypeIcons();
   const [pending, setPending] = useState<PendingMoves>(EMPTY);
   const [prompt, setPrompt] = useState<AmountPrompt>();
+  const [selection, setSelection] = useState<Selection>(NO_SELECTION);
 
   const lookups = useMemo(() => {
     const sharedQty = new Map(shared.map((e) => [e.typeId, e.quantity]));
@@ -106,18 +116,29 @@ export function SharedInventory({
   );
   const staged = useMemo(() => normalize(pending), [normalize, pending]);
 
+  /**
+   * Stage each item's `max` moving out of `from`. Put-backs go first: undoing
+   * a ghost of a type must not eat into the real stack of that same type
+   * moving in the same drop.
+   */
   const stage = useCallback(
-    (typeId: number, from: PanelId, amount: number, ghost: boolean) => {
+    (from: PanelId, items: DragItem[]) => {
+      const ordered = [...items].sort((a, b) => Number(b.ghost) - Number(a.ghost));
       setPending((current) =>
-        stageMove(
+        ordered.reduce(
+          (moves, { typeId, max, ghost }) =>
+            stageMove(
+              moves,
+              typeId,
+              from,
+              max,
+              { shared: lookups.sharedQty(typeId), own: lookups.ownQty(typeId) },
+              ghost,
+            ),
           normalize(current),
-          typeId,
-          from,
-          amount,
-          { shared: lookups.sharedQty(typeId), own: lookups.ownQty(typeId) },
-          ghost,
         ),
       );
+      setSelection(NO_SELECTION);
       onStagingChange();
     },
     [lookups, normalize, onStagingChange],
@@ -126,17 +147,31 @@ export function SharedInventory({
   const onDrop = useCallback(
     (event: DropEvent) => {
       if (busy) return;
-      if (event.pickAmount && event.max > 1) {
-        const { typeId, from, max, ghost } = event;
-        setPrompt({ typeId, from, max, ghost });
+      const [only] = event.items;
+      if (event.items.length === 1 && event.pickAmount && only.max > 1) {
+        setPrompt({ typeId: only.typeId, from: event.from, max: only.max, ghost: only.ghost });
       } else {
-        stage(event.typeId, event.from, event.max, event.ghost);
+        stage(event.from, event.items);
       }
     },
     [busy, stage],
   );
 
   const { drag, begin } = useTileDrag(onDrop);
+
+  // Escape drops the selection. A drag in progress, or the amount box,
+  // takes the key instead.
+  const dragging = useRef(false);
+  dragging.current = Boolean(drag);
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape" && !event.defaultPrevented && !dragging.current) {
+        setSelection(NO_SELECTION);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const summary = useMemo(() => summarize(staged), [staged]);
   const sharedTiles = useMemo(() => panelTiles("shared", shared, staged), [shared, staged]);
@@ -173,6 +208,7 @@ export function SharedInventory({
 
   function commit(moves: PendingMoves) {
     if (busy || blockedFor(moves)) return;
+    setSelection(NO_SELECTION);
     void onCommit(summarize(moves), clearStaged);
   }
 
@@ -185,13 +221,16 @@ export function SharedInventory({
     commit(everything);
   }
 
-  const moveAllOf = (panel: PanelId) => (tile: TileModel) => {
-    if (!busy) stage(tile.typeId, panel, tile.quantity, tile.ghost);
+  const moveTilesOf = (panel: PanelId) => (tiles: TileModel[]) => {
+    if (!busy) stage(panel, tiles.map(asItem));
   };
-  const pickAmountOf = (panel: PanelId) => (tile: TileModel) => {
+  const pickAmountOf = (panel: PanelId) => (tile: TileModel, viaKeyboard: boolean) => {
     if (busy) return;
-    if (tile.quantity <= 1) stage(tile.typeId, panel, tile.quantity, tile.ghost);
-    else setPrompt({ typeId: tile.typeId, from: panel, max: tile.quantity, ghost: tile.ghost });
+    if (tile.quantity <= 1) stage(panel, [asItem(tile)]);
+    else {
+      const { typeId, quantity: max, ghost } = tile;
+      setPrompt({ typeId, from: panel, max, ghost, viaKeyboard });
+    }
   };
 
   const promptTitle = prompt
@@ -218,16 +257,19 @@ export function SharedInventory({
       canMoveOut={panel === "shared" ? canTake : canShare}
       frozen={busy}
       moveHint={
-        panel === "shared"
+        (panel === "shared"
           ? "Drag down to take, or double-click for the whole stack. Shift-drag or right-click to choose an amount."
-          : "Drag up to share, or double-click for the whole stack. Shift-drag or right-click to choose an amount."
+          : "Drag up to share, or double-click for the whole stack. Shift-drag or right-click to choose an amount.") +
+        "\nCtrl-click, Shift-click or drag a box to select several, then drag them together."
       }
       dropReady={Boolean(drag) && drag?.from !== panel}
       dropHover={drag?.over === panel}
       emptyMessage={panel === "shared" ? sharedEmpty : ownEmpty}
       capacity={panel === "shared" ? sharedCapacity : ownCapacity}
+      selection={selection}
+      onSelectionChange={setSelection}
       onBeginDrag={begin}
-      onMoveAll={moveAllOf(panel)}
+      onMoveTiles={moveTilesOf(panel)}
       onPickAmount={pickAmountOf(panel)}
     />
   ));
@@ -253,7 +295,9 @@ export function SharedInventory({
 
       {drag && (
         <div
-          className={drag.over ? "drag-ghost will-drop" : "drag-ghost"}
+          className={["drag-ghost", drag.items.length > 1 && "multi", drag.over && "will-drop"]
+            .filter(Boolean)
+            .join(" ")}
           style={{ left: drag.x, top: drag.y }}
           aria-hidden="true"
         >
@@ -262,7 +306,11 @@ export function SharedInventory({
           ) : (
             <span className="tile-noicon" />
           )}
-          <span className="tile-qty">{formatQuantity(drag.max)}</span>
+          <span className="tile-qty">
+            {drag.items.length > 1
+              ? `${drag.items.length} stacks`
+              : formatQuantity(drag.items[0].max)}
+          </span>
         </div>
       )}
 
@@ -271,9 +319,10 @@ export function SharedInventory({
           title={promptTitle}
           itemName={nameOf(prompt.typeId)}
           max={prompt.max}
+          waitForEnterRelease={prompt.viaKeyboard}
           onCancel={() => setPrompt(undefined)}
           onConfirm={(amount) => {
-            stage(prompt.typeId, prompt.from, amount, prompt.ghost);
+            stage(prompt.from, [{ typeId: prompt.typeId, max: amount, ghost: prompt.ghost }]);
             setPrompt(undefined);
           }}
         />
