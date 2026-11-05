@@ -580,6 +580,11 @@ button.refresh {
   outline-offset: 0;
 }
 
+.dialog-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+
 .dialog-actions {
   display: flex;
   justify-content: flex-end;

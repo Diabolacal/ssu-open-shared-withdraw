@@ -1,5 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent, ReactNode } from "react";
+import { baseTypeId } from "../chainKey";
+import type { ChainKey } from "../chainKey";
 import { formatMaxM3, formatUsedM3 } from "./format";
 import { ItemTile } from "./ItemTile";
 import type { PanelId, TileModel } from "./moves";
@@ -20,8 +22,8 @@ interface InventoryPanelProps {
   title: string;
   titleHint?: string;
   tiles: TileModel[];
-  nameOf: (typeId: number) => string;
-  iconOf: (typeId: number) => string | undefined;
+  nameOf: (typeId: ChainKey) => string;
+  iconOf: (typeId: ChainKey) => string | undefined;
   /** May real (non-ghost) tiles in this panel move to the other one? */
   canMoveOut: boolean;
   /** Nothing moves (a transaction is in flight). */
@@ -72,7 +74,8 @@ export function InventoryPanel({
     return tiles.filter(
       (tile) =>
         nameOf(tile.typeId).toLowerCase().includes(needle) ||
-        String(tile.typeId).includes(needle),
+        String(baseTypeId(tile.typeId)).includes(needle) ||
+        tile.typeId.includes(needle),
     );
   }, [tiles, search, nameOf]);
 

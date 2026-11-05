@@ -26,7 +26,8 @@ export interface SmartObjectState {
   refetch?: () => Promise<unknown>;
 }
 
+/** Wallets differ in what they resolve with; txOutcome.executedDigest reads it. */
 export interface DAppKitSigner {
-  signAndExecute?: (input: { transaction: unknown }) => Promise<{ digest?: string }>;
-  signAndExecuteTransaction?: (input: { transaction: unknown }) => Promise<{ digest?: string }>;
+  signAndExecute?: (input: { transaction: unknown }) => Promise<unknown>;
+  signAndExecuteTransaction?: (input: { transaction: unknown }) => Promise<unknown>;
 }

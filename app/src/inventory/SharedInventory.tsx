@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import type { ChainKey } from "../chainKey";
 import type { StatusState } from "../types";
 import { useTypeIcons } from "../typeIcons";
 import { formatQuantity } from "./format";
@@ -30,7 +31,7 @@ interface SharedInventoryProps {
   own: StockEntry[];
   sharedBucket?: Bucket;
   ownBucket?: Bucket;
-  nameOf: (typeId: number) => string;
+  nameOf: (typeId: ChainKey) => string;
   canTake: boolean;
   canShare: boolean;
   busy: boolean;
@@ -56,7 +57,7 @@ const asItem = (tile: TileModel): DragItem => ({
 });
 
 interface AmountPrompt {
-  typeId: number;
+  typeId: ChainKey;
   from: PanelId;
   max: number;
   ghost: boolean;
@@ -92,12 +93,12 @@ export function SharedInventory({
   const lookups = useMemo(() => {
     const sharedQty = new Map(shared.map((e) => [e.typeId, e.quantity]));
     const ownQty = new Map(own.map((e) => [e.typeId, e.quantity]));
-    const volume = new Map<number, number>();
+    const volume = new Map<ChainKey, number>();
     for (const e of [...shared, ...own]) volume.set(e.typeId, e.volume);
     return {
-      sharedQty: (typeId: number) => sharedQty.get(typeId) ?? 0,
-      ownQty: (typeId: number) => ownQty.get(typeId) ?? 0,
-      volume: (typeId: number) => volume.get(typeId) ?? 0,
+      sharedQty: (typeId: ChainKey) => sharedQty.get(typeId) ?? 0,
+      ownQty: (typeId: ChainKey) => ownQty.get(typeId) ?? 0,
+      volume: (typeId: ChainKey) => volume.get(typeId) ?? 0,
     };
   }, [shared, own]);
 

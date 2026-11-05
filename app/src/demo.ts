@@ -1,4 +1,6 @@
 import type { Bucket, InventoryEntry, UnitState } from "./unitState";
+import { compareChainKeys } from "./chainKey";
+import type { ChainKey } from "./chainKey";
 import { CLAIM_AUTH_PACKAGE_ID, CLAIM_MODULE } from "./config";
 
 /**
@@ -13,8 +15,8 @@ const DEMO_CHARACTER = {
   ownerCapId: "0xdem0cap",
 };
 
-function entry(typeId: number, quantity: number, volume: number): InventoryEntry {
-  return { typeId, quantity, volume };
+function entry(typeId: number | ChainKey, quantity: number, volume: number): InventoryEntry {
+  return { typeId: String(typeId), quantity, volume };
 }
 
 function bucket(entries: InventoryEntry[], maxCapacity: number): Bucket {
@@ -23,7 +25,9 @@ function bucket(entries: InventoryEntry[], maxCapacity: number): Bucket {
     0,
   );
   // Copies, so React state never shares objects the simulator mutates.
-  const copies = entries.map((e) => ({ ...e })).sort((a, b) => a.typeId - b.typeId);
+  const copies = entries
+    .map((e) => ({ ...e }))
+    .sort((a, b) => compareChainKeys(a.typeId, b.typeId));
   return { entries: copies, usedCapacity, maxCapacity };
 }
 
@@ -95,7 +99,7 @@ export function fetchDemoUnitState(): UnitState {
 function move(
   from: InventoryEntry[],
   to: InventoryEntry[],
-  typeId: number,
+  typeId: ChainKey,
   quantity: number,
 ) {
   const source = from.find((e) => e.typeId === typeId);
@@ -112,7 +116,7 @@ function move(
   }
 }
 
-type DemoLine = { typeId: number; quantity: number };
+type DemoLine = { typeId: ChainKey; quantity: number };
 
 /** Simulates one batched move transaction against the canned store. */
 export async function applyDemoMoves(takes: DemoLine[], shares: DemoLine[]): Promise<void> {

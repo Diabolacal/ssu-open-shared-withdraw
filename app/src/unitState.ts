@@ -1,11 +1,17 @@
 import { blake2b } from "@noble/hashes/blake2.js";
 import { bcs } from "@mysten/sui/bcs";
 import { deriveObjectID, normalizeSuiAddress } from "@mysten/sui/utils";
+import { compareChainKeys, parseChainKey } from "./chainKey";
+import type { ChainKey } from "./chainKey";
 import { SUI_GRAPHQL_URL, WORLD_PACKAGE_ID } from "./config";
 import { asRecord } from "./objectReaders";
 
 export interface InventoryEntry {
-  typeId: number;
+  /**
+   * The exact on-chain item key: the type id, or (variant << 32) | type id
+   * for a variant (chainKey.ts). Each key is its own row.
+   */
+  typeId: ChainKey;
   quantity: number;
   /** Per-unit volume in on-chain units (m3 * VOLUME_SCALE). */
   volume: number;
@@ -164,7 +170,13 @@ export async function resolveItemIdToObjectId(
   );
 }
 
-function parseBucket(valueJson: unknown): Bucket | undefined {
+/**
+ * One inventory bucket from chain JSON. The key stays an exact string (u64
+ * values arrive as strings; `Number()` would round a packed variant key to a
+ * different item). Entries below one whole unit are left out: claim.move
+ * aborts on a quantity of 0, so they could never be moved from here.
+ */
+export function parseBucket(valueJson: unknown): Bucket | undefined {
   const inventory = asRecord(valueJson);
   if (!inventory) return undefined;
   const items = asRecord(inventory.items);
@@ -174,14 +186,14 @@ function parseBucket(valueJson: unknown): Bucket | undefined {
   for (const pair of contents) {
     const record = asRecord(pair);
     const value = asRecord(record?.value);
-    const typeId = Number(record?.key ?? value?.type_id);
+    const typeId = parseChainKey(record?.key ?? value?.type_id);
     const quantity = Number(value?.quantity);
     const volume = Number(value?.volume ?? 0);
-    if (Number.isFinite(typeId) && Number.isFinite(quantity) && quantity > 0) {
+    if (typeId !== undefined && Number.isInteger(quantity) && quantity >= 1) {
       entries.push({ typeId, quantity, volume });
     }
   }
-  entries.sort((a, b) => a.typeId - b.typeId);
+  entries.sort((a, b) => compareChainKeys(a.typeId, b.typeId));
   return {
     entries,
     usedCapacity: Number(inventory.used_capacity ?? 0),

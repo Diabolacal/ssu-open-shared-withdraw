@@ -122,8 +122,35 @@ gas charge. Shares borrow the character's OwnerCap once and pass it to every
 drag-and-drop API, which off-screen browser hosts like the in-game one do not
 reliably support.
 
+### Item keys
+
+A storage inventory is keyed by a u64. An item with a variant packs it into
+the key the way the game client does: `key = (variant << 32) | type_id`, so
+`type_id = key & 0xFFFFFFFF` and `variant = key >> 32` (0 = none). Items
+without a variant keep their plain type id. Packed keys run past 2^53, where
+`Number()` rounds to a different item, so keys stay exact decimal strings
+from the inventory read to the transaction argument (`src/chainKey.ts`).
+Names and icons resolve by the base type, so variants of one type cost one
+lookup; each variant is still its own tile, with its variant number in the
+tooltip. Chain quantities are whole units: an amount below 1 is refused with
+a message before it reaches the contract, which aborts on 0.
+
+### Wallet messages
+
+`src/txOutcome.ts` turns every wallet outcome into one short sentence. The
+game client's wallet throws `Error(JSON.stringify(error))`: code 4001 is the
+player rejecting in the game's approval window, and code -32009 is an
+on-chain failure carrying the failed transaction, whose Move abort is read
+for a reason when it can be. Other wallets' decline sentences ("rejected by
+user") get a plain decline message, a `FailedTransaction` result reads as an
+on-chain failure, a result the app cannot confirm (no digest, a timeout, or
+one it cannot decode) clears the staging and re-reads the unit, and anything
+else gets a readable fallback, never raw JSON. Nothing times out while the
+player decides.
+
 ```powershell
 pnpm install
+pnpm --dir app test           # vitest: item keys, transactions, wallet messages
 pnpm --dir app build          # tsc + vite build
 sui move test --path move/ssu_open_claim
 npx wrangler pages deploy dist --project-name ssu-open-shared-withdraw --branch main  # from app/
@@ -177,8 +204,12 @@ third-party unit (read-only, foreign extension notice).
   builder docs): the URL set on the unit MUST carry the unit id itself,
   `?storageUnitId=0x…`. The in-app `itemId` derivation is kept in case CCP
   changes this.
-- The in-game wallet reports transaction success WITHOUT a digest field —
-  never treat a missing digest as failure (transactions.ts).
+- Transaction results: the dapp-kit resolves with
+  `{ $kind: "Transaction", Transaction: { digest, … } }`, so the digest sits
+  inside `Transaction`. The first note here, that the in-game wallet reports
+  success "without a digest", came from reading the top level; the client's
+  signer does return one. A result without a digest now counts as
+  unconfirmed: the app says so and re-reads the unit (src/txOutcome.ts).
 - The wallet may carry PlayerProfiles from retired cycles; the character
   lookup filters by the current world package (src/usePlayerCharacter.ts).
 - The dapp-kit's own resolver needs `VITE_EVE_WORLD_PACKAGE_ID` set — it
@@ -191,6 +222,12 @@ third-party unit (read-only, foreign extension notice).
 
 ## Still to verify in game
 
+- A successful take on the current client still ends in "Done" (it now
+  requires the digest the dapp-kit reports inside `Transaction`).
+- The game's approval window: one take and one share go through, and one
+  Reject shows "You declined the request in the game's approval window."
+- A variant item in a unit shows as its own tile under its base type's name
+  and icon, and takes with the exact key.
 - Dragging tiles between the two storage windows inside the in-game browser
   (pointer-event drag, verified in desktop Chrome; double-click is the
   fallback if a host swallows drags).

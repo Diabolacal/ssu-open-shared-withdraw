@@ -8,20 +8,23 @@
  * re-dragging all fall out of the same arithmetic.
  */
 
+import type { ChainKey } from "../chainKey";
+
 export type PanelId = "shared" | "own";
 
 export interface StockEntry {
-  typeId: number;
+  /** Exact on-chain item key (chainKey.ts); a variant is its own entry. */
+  typeId: ChainKey;
   quantity: number;
   /** Per-unit volume in on-chain units (m3 x VOLUME_SCALE). */
   volume: number;
 }
 
-export type PendingMoves = ReadonlyMap<number, number>;
+export type PendingMoves = ReadonlyMap<ChainKey, number>;
 
 export interface TileModel {
   key: string;
-  typeId: number;
+  typeId: ChainKey;
   /** The count printed on the tile's badge. */
   quantity: number;
   /** A staged arrival, drawn as a ghost until committed. */
@@ -85,7 +88,7 @@ export function panelTiles(
  */
 export function stageMove(
   pending: PendingMoves,
-  typeId: number,
+  typeId: ChainKey,
   from: PanelId,
   amount: number,
   limits: { shared: number; own: number },
@@ -108,11 +111,11 @@ export function stageMove(
  */
 export function clampPending(
   pending: PendingMoves,
-  sharedQuantity: (typeId: number) => number,
-  ownQuantity: (typeId: number) => number,
+  sharedQuantity: (typeId: ChainKey) => number,
+  ownQuantity: (typeId: ChainKey) => number,
 ): PendingMoves {
   let changed = false;
-  const result = new Map<number, number>();
+  const result = new Map<ChainKey, number>();
   for (const [typeId, delta] of pending) {
     const next = Math.min(Math.max(delta, -ownQuantity(typeId)), sharedQuantity(typeId));
     if (next !== delta) changed = true;
@@ -122,8 +125,8 @@ export function clampPending(
 }
 
 export interface MoveSummary {
-  takes: { typeId: number; quantity: number }[];
-  shares: { typeId: number; quantity: number }[];
+  takes: { typeId: ChainKey; quantity: number }[];
+  shares: { typeId: ChainKey; quantity: number }[];
 }
 
 export function summarize(pending: PendingMoves): MoveSummary {
@@ -139,7 +142,7 @@ export function summarize(pending: PendingMoves): MoveSummary {
 export function pendingVolumeDelta(
   panel: PanelId,
   pending: PendingMoves,
-  volumeOf: (typeId: number) => number,
+  volumeOf: (typeId: ChainKey) => number,
 ): number {
   let delta = 0;
   for (const [typeId, moved] of pending) {
@@ -153,7 +156,7 @@ export function pendingVolumeDelta(
 export function pendingVolumeIn(
   panel: PanelId,
   pending: PendingMoves,
-  volumeOf: (typeId: number) => number,
+  volumeOf: (typeId: ChainKey) => number,
 ): number {
   let total = 0;
   for (const [typeId, moved] of pending) total += incoming(panel, moved) * volumeOf(typeId);

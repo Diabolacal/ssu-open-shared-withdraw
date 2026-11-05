@@ -50,8 +50,9 @@ export function QuantityDialog({
     input.current?.select();
   }, []);
 
+  // The chain moves whole units only, and claim.move aborts on 0.
   const parsed = Number(value);
-  const valid = Number.isInteger(parsed) && parsed > 0 && parsed <= max;
+  const valid = Number.isInteger(parsed) && parsed >= 1 && parsed <= max;
 
   function bump(delta: number) {
     const current = Number(value) || 0;
@@ -147,6 +148,11 @@ export function QuantityDialog({
             Max
           </button>
         </div>
+        {!valid && (
+          <p className="dialog-note warn-text" role="alert">
+            {`Pick a whole number from 1 to ${max.toLocaleString("en-US")}.`}
+          </p>
+        )}
         <div className="dialog-actions">
           <button type="button" title="Close without moving anything" onClick={onCancel}>
             Cancel

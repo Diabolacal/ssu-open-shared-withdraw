@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { baseTypeId } from "./chainKey";
+import type { ChainKey } from "./chainKey";
 
 /**
  * Item icons are the game client's own inventory art. They are NOT in git
@@ -26,8 +28,11 @@ function loadIconIndex(): Promise<IconIndex> {
   return indexPromise;
 }
 
-/** Returns a lookup from typeId to its icon URL (undefined when there is none). */
-export function useTypeIcons(): (typeId: number) => string | undefined {
+/**
+ * Returns a lookup from an item key to its icon URL (undefined when there is
+ * none). Icons belong to the base type, so every variant shares its icon.
+ */
+export function useTypeIcons(): (typeId: ChainKey) => string | undefined {
   const [index, setIndex] = useState<IconIndex>({});
 
   useEffect(() => {
@@ -41,7 +46,7 @@ export function useTypeIcons(): (typeId: number) => string | undefined {
   }, []);
 
   return (typeId) => {
-    const hash = index[String(typeId)];
+    const hash = index[String(baseTypeId(typeId))];
     return hash ? `${ICON_BASE}${hash}.png` : undefined;
   };
 }

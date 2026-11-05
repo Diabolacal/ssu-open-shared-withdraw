@@ -28,9 +28,15 @@ export function primeTypeNames(names: Record<number, string>): void {
   }
 }
 
+/** Base type ids are u32; anything else (e.g. a packed variant key) never hits the network. */
+function isBaseTypeId(typeId: number): boolean {
+  return Number.isInteger(typeId) && typeId > 0 && typeId <= 0xffffffff;
+}
+
 async function resolveTypeName(typeId: number): Promise<string> {
   const cached = nameCache.get(typeId);
   if (cached) return cached;
+  if (!isBaseTypeId(typeId)) return `type ${typeId}`;
 
   const bundled = BUNDLED_NAMES[String(typeId)];
   if (bundled) {
@@ -42,6 +48,12 @@ async function resolveTypeName(typeId: number): Promise<string> {
   if (!inflight) {
     inflight = fetch(`https://${WORLD_API_HOST}/v2/types/${typeId}`)
       .then(async (response) => {
+        // A 404 is final for this session; other failures retry on a later mount.
+        if (response.status === 404) {
+          const fallback = `type ${typeId}`;
+          nameCache.set(typeId, fallback);
+          return fallback;
+        }
         if (!response.ok) throw new Error(`type lookup ${response.status}`);
         const info = (await response.json()) as { name?: unknown };
         const name =
@@ -58,8 +70,10 @@ async function resolveTypeName(typeId: number): Promise<string> {
 }
 
 /**
- * Resolves type_ids to player-facing names: bundled client names first, then
- * the EVE Frontier world API. Unresolved ids fall back to "type <id>".
+ * Resolves BASE type ids (chainKey.baseTypeId) to player-facing names:
+ * bundled client names first, then the EVE Frontier world API. Callers pass
+ * base ids, so any number of variants of one type cost one lookup. Unresolved
+ * ids fall back to "type <id>".
  */
 export function useTypeNames(typeIds: number[]): Record<number, string> {
   const [names, setNames] = useState<Record<number, string>>({});

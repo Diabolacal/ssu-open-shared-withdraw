@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useConnection, useSmartObject } from "@evefrontier/dapp-kit";
 import { useCurrentAccount, useDAppKit, useWallets } from "@mysten/dapp-kit-react";
+import { baseTypeId, compareChainKeys } from "./chainKey";
+import type { ChainKey } from "./chainKey";
 import {
   CLAIM_AUTH_TYPE,
   CLAIM_PACKAGE_ID,
@@ -19,6 +21,7 @@ import {
   signAndExecute,
   waitForIndexed,
 } from "./transactions";
+import { describeTxError } from "./txOutcome";
 import type { DAppKitSigner, SmartObjectState, StatusState } from "./types";
 import { useTypeNames } from "./typeNames";
 import { readUrlContext } from "./urlContext";
@@ -30,26 +33,6 @@ import type { Transaction } from "@mysten/sui/transactions";
 interface ShelfEntry extends StockEntry {
   mainQuantity: number;
   openQuantity: number;
-}
-
-function friendlyError(raw: string): string {
-  const message = raw.toLowerCase();
-  if (message.includes("insufficient capacity"))
-    return "Not enough room in the destination. Clear some space, then retry.";
-  if (message.includes("insufficient quantity"))
-    return "Not enough of that item left. The list refreshes every few seconds.";
-  if (message.includes("not online")) return "This unit is offline.";
-  if (message.includes("extension"))
-    return "Shared access is not enabled on this unit.";
-  if (message.includes("gas"))
-    return "Your wallet needs a little testnet SUI to pay gas.";
-  if (
-    message.includes("reject") ||
-    message.includes("denied") ||
-    message.includes("dismiss")
-  )
-    return "Signature request declined.";
-  return raw.length > 140 ? `${raw.slice(0, 140)}…` : raw;
 }
 
 // The in-game browser sometimes reopens the dApp without its query string;
@@ -108,7 +91,7 @@ function App() {
   const unit = state?.unit;
 
   const shelf = useMemo<ShelfEntry[]>(() => {
-    const byType = new Map<number, ShelfEntry>();
+    const byType = new Map<ChainKey, ShelfEntry>();
     for (const entry of state?.main?.entries ?? []) {
       byType.set(entry.typeId, {
         typeId: entry.typeId,
@@ -133,28 +116,35 @@ function App() {
         });
       }
     }
-    return [...byType.values()].sort((a, b) => a.typeId - b.typeId);
+    return [...byType.values()].sort((a, b) => compareChainKeys(a.typeId, b.typeId));
   }, [state?.main, state?.open]);
 
   const ownEntries = useMemo(() => state?.own?.entries ?? [], [state?.own]);
+  // Names belong to the base type: variants of one type share one lookup.
   const names = useTypeNames(
     useMemo(
       () => [
-        ...shelf.map((entry) => entry.typeId),
-        ...ownEntries.map((entry) => entry.typeId),
+        ...new Set(
+          [...shelf, ...ownEntries].map((entry) => baseTypeId(entry.typeId)),
+        ),
       ],
       [shelf, ownEntries],
     ),
   );
+  const nameOf = (typeId: ChainKey) => {
+    const base = baseTypeId(typeId);
+    return names[base] ?? `Item Type ${base}`;
+  };
 
-  // Sort by player-facing name once resolved (unresolved sink to the bottom).
-  function byName(a: { typeId: number }, b: { typeId: number }): number {
-    const nameA = names[a.typeId];
-    const nameB = names[b.typeId];
-    if (nameA && nameB) return nameA.localeCompare(nameB);
-    if (nameA) return -1;
-    if (nameB) return 1;
-    return a.typeId - b.typeId;
+  // Sort by player-facing name once resolved (unresolved sink to the bottom);
+  // variants of one type sit together, in key order.
+  function byName(a: { typeId: ChainKey }, b: { typeId: ChainKey }): number {
+    const nameA = names[baseTypeId(a.typeId)];
+    const nameB = names[baseTypeId(b.typeId)];
+    if (nameA && nameB && nameA !== nameB) return nameA.localeCompare(nameB);
+    if (nameA && !nameB) return -1;
+    if (nameB && !nameA) return 1;
+    return compareChainKeys(a.typeId, b.typeId);
   }
   const shelfSorted = [...shelf].sort(byName);
   const ownSorted = [...ownEntries].sort(byName);
@@ -197,7 +187,8 @@ function App() {
     simulate?: () => Promise<void>;
     /**
      * Runs once the transaction's effects have been re-read, so staged ghosts
-     * hand straight over to the real result (no snap-back in between).
+     * hand straight over to the real result (no snap-back in between). Also
+     * runs when the outcome is unconfirmed (see the catch below).
      */
     onSettled?: () => void;
   }) {
@@ -220,12 +211,16 @@ function App() {
       input.onSettled?.();
       settleStatus({ state: "done", message: input.doneMessage }, 9000);
     } catch (cause) {
-      settleStatus({
-        state: "failed",
-        message: friendlyError(
-          cause instanceof Error ? cause.message : "Something went wrong.",
-        ),
-      });
+      const failure = describeTxError(cause);
+      settleStatus({ state: "failed", message: failure.message });
+      // A chain failure or an unconfirmed result may still have changed the
+      // unit (or the unit changed under us): show what is really there.
+      if (failure.kind === "chain" || failure.kind === "unconfirmed") {
+        void refetch({ fresh: true });
+      }
+      // An unconfirmed transaction may have gone through: drop the staging so
+      // one more click cannot send the same moves twice.
+      if (failure.kind === "unconfirmed") input.onSettled?.();
     }
   }
 
@@ -244,12 +239,10 @@ function App() {
       // older version of this dApp parked in the open inventory.
       const entry = shelf.find((candidate) => candidate.typeId === typeId);
       const mainQuantity = Math.min(quantity, entry?.mainQuantity ?? 0);
-      return { typeId: String(typeId), mainQuantity, openQuantity: quantity - mainQuantity };
+      // typeId is the exact chain key string: it reaches the transaction as is.
+      return { typeId, mainQuantity, openQuantity: quantity - mainQuantity };
     });
-    const shares = moves.shares.map(({ typeId, quantity }) => ({
-      typeId: String(typeId),
-      quantity,
-    }));
+    const shares = moves.shares.map(({ typeId, quantity }) => ({ typeId, quantity }));
     await runTx({
       doneMessage:
         takes.length > 0
@@ -447,7 +440,7 @@ function App() {
               ? { used: state.own.usedCapacity, max: state.own.maxCapacity }
               : undefined
           }
-          nameOf={(typeId) => names[typeId] ?? `Item Type ${typeId}`}
+          nameOf={nameOf}
           canTake={canTake && isOwner !== true}
           canShare={canShare}
           busy={busy}

@@ -8,9 +8,10 @@
     "dev": "pnpm --dir app dev",
     "preview": "pnpm --dir app preview",
     "lint": "pnpm --dir app lint",
+    "test": "pnpm --dir app test",
     "move:build": "sui move build --path move/ssu_open_claim",
     "move:test": "sui move test --path move/ssu_open_claim",
-    "check": "pnpm build && pnpm move:build && pnpm move:test"
+    "check": "pnpm test && pnpm build && pnpm move:build && pnpm move:test"
   },
   "packageManager": "pnpm@10.17.0"
 }

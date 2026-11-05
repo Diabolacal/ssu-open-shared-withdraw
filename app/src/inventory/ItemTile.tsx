@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import type { KeyboardEvent, MouseEvent, PointerEvent } from "react";
+import { variantId } from "../chainKey";
 import { formatQuantity } from "./format";
 import type { TileModel } from "./moves";
 import type { ClickModifiers } from "./selection";
@@ -54,7 +55,10 @@ export function ItemTile({
     : tile.departing
       ? "All staged to leave"
       : tile.quantity.toLocaleString("en-US");
-  const tooltip = [name, status, movable ? moveHint : undefined]
+  // Variants share a name and icon with their base type; the tooltip is
+  // what tells two such stacks apart.
+  const variant = variantId(tile.typeId);
+  const tooltip = [name, variant ? `Variant ${variant}` : undefined, status, movable ? moveHint : undefined]
     .filter(Boolean)
     .join("\n");
 

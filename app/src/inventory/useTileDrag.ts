@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
+import type { ChainKey } from "../chainKey";
 import type { PanelId } from "./moves";
 
 /**
@@ -12,7 +13,7 @@ import type { PanelId } from "./moves";
  */
 
 export interface DragItem {
-  typeId: number;
+  typeId: ChainKey;
   /** Most that can move from this tile (its badge count). */
   max: number;
   /** The tile is a staged arrival being put back. */

@@ -27,7 +27,7 @@ IS the shelf. Two halves:
    `move/ssu_open_claim/Published.toml` into `VITE_CLAIM_PACKAGE_ID` and redeploy the app.
    Current IDs: README "Current testnet deployment".
 4. All `VITE_*` values are public browser config — never put secrets in one.
-5. Gates before commit: `pnpm --dir app build` and `sui move test --path move/ssu_open_claim`.
+5. Gates before commit: `pnpm --dir app test`, `pnpm --dir app build` and `sui move test --path move/ssu_open_claim`.
 6. Production deploy only on explicit operator instruction; a push or merge is not permission.
 7. Preserve unrelated dirty-tree work; never run destructive git cleanup.
 8. `move/ssu_open_claim/Move.toml` pins the world package **by git** to an exact upstream
