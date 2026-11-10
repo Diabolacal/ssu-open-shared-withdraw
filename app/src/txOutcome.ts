@@ -5,8 +5,10 @@
  *
  * - Success. The dapp-kit wraps it as `{ $kind: "Transaction", Transaction }`
  *   with the digest INSIDE `Transaction`; other builds return a plain
- *   `{ digest }`. A success must carry a digest: anything else that resolves
- *   is not proof the transaction ran, so it counts as a failure.
+ *   `{ digest }`. The dapp-kit builds that variant only from effects that
+ *   say the transaction succeeded, so it counts as a success even when the
+ *   wallet left the digest out. Anything else that resolves without a digest
+ *   is not proof the transaction ran, so it counts as unconfirmed.
  * - Declined. The game client's approval window rejects with code 4001; other
  *   wallets throw a sentence such as "Transaction rejected by user".
  * - Failed on chain. The game client rejects with code -32009 and the failed
@@ -57,8 +59,9 @@ function nonEmptyString(value: unknown): string | undefined {
 // ─── Results ──────────────────────────────────────────────
 
 /**
- * The digest of a transaction that ran successfully, or a TxError. Accepts
- * the dapp-kit union, a plain `{ digest }`, and JSON-RPC style effects.
+ * The digest of a transaction that ran successfully ("" when the wallet gave
+ * none for a dapp-kit success), or a TxError. Accepts the dapp-kit union, a
+ * plain `{ digest }`, and JSON-RPC style effects.
  */
 export function executedDigest(result: unknown): string {
   const record = asRecord(result);
@@ -72,8 +75,11 @@ export function executedDigest(result: unknown): string {
   }
 
   const digest = nonEmptyString(executed?.digest);
-  if (!digest) throw new TxError("unconfirmed", UNCONFIRMED_TEXT);
-  return digest;
+  if (digest) return digest;
+  // The dapp-kit decoded successful effects but the wallet sent no digest
+  // (the game client's wallet was seen doing this in 2026-07).
+  if (record?.$kind === "Transaction" && status?.success === true) return "";
+  throw new TxError("unconfirmed", UNCONFIRMED_TEXT);
 }
 
 // ─── Wallet errors ────────────────────────────────────────

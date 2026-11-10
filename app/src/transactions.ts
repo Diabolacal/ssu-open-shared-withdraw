@@ -171,9 +171,10 @@ export function buildRevokeTx(input: {
 }
 
 /**
- * Signs and sends, then returns the digest of a transaction that ran. Throws
- * a TxError when it failed on chain or the wallet confirmed nothing (see
- * txOutcome.ts); a declined or broken request rejects as the wallet threw it.
+ * Signs and sends, then returns the digest of a transaction that ran ("" if
+ * the wallet reported success without one). Throws a TxError when it failed
+ * on chain or the wallet confirmed nothing (see txOutcome.ts); a declined or
+ * broken request rejects as the wallet threw it.
  *
  * No timeout on purpose: the game's approval window waits for the player for
  * as long as they take, and so does this.
@@ -193,6 +194,8 @@ export async function signAndExecute(
 
 const INDEX_POLL_MS = 500;
 const INDEX_TIMEOUT_MS = 12_000;
+/** With no digest to poll for, give the index this long before re-reading. */
+export const NO_DIGEST_SETTLE_MS = 3_000;
 
 const TX_QUERY = `query TxIndexed($digest: String!) { transaction(digest: $digest) { digest } }`;
 
@@ -203,7 +206,10 @@ const TX_QUERY = `query TxIndexed($digest: String!) { transaction(digest: $diges
  */
 export async function waitForIndexed(digest: string): Promise<void> {
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-  if (!digest) return;
+  if (!digest) {
+    await sleep(NO_DIGEST_SETTLE_MS);
+    return;
+  }
   const deadline = Date.now() + INDEX_TIMEOUT_MS;
   while (Date.now() < deadline) {
     try {

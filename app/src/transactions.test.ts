@@ -85,6 +85,12 @@ describe("buildMoveTx", () => {
     ]);
   });
 
+  it("takes one unit from each of three live variant stacks", () => {
+    const keys = ["1864015903175", "1868310871756", "1872605837766"];
+    const tx = moveTx(keys.map((typeId) => ({ typeId, mainQuantity: 1, openQuantity: 0 })));
+    expect(claimCalls(tx)).toEqual(keys.map((key) => ({ fn: "take", key, quantity: 1 })));
+  });
+
   it.each([0, -1, 0.5, 1.5, Number.NaN])("refuses a take of %s units", (quantity) => {
     expect(() => moveTx([{ typeId: "77800", mainQuantity: quantity, openQuantity: 0 }])).toThrow(
       WHOLE_UNITS_TEXT,
@@ -121,12 +127,17 @@ describe("signAndExecute", () => {
     await expect(signAndExecute(signer({ digest: "D2" }), tx())).resolves.toBe("D2");
   });
 
+  it("accepts a dapp-kit success whose wallet sent no digest", async () => {
+    const result = { $kind: "Transaction", Transaction: { status: { success: true, error: null } } };
+    await expect(signAndExecute(signer(result), tx())).resolves.toBe("");
+  });
+
   it.each([
     ["nothing", undefined],
     ["an empty object", {}],
-    ["a success without a digest", { $kind: "Transaction", Transaction: { status: { success: true, error: null } } }],
+    ["a dapp-kit result with no status", { $kind: "Transaction", Transaction: {} }],
     ["an empty digest", { digest: "" }],
-  ])("counts %s as a failure", async (_label, result) => {
+  ])("counts %s as unconfirmed", async (_label, result) => {
     const sent = signAndExecute(signer(result), tx());
     await expect(sent).rejects.toBeInstanceOf(TxError);
     await expect(sent).rejects.toThrow(UNCONFIRMED_TEXT);

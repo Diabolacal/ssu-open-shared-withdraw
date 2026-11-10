@@ -192,6 +192,9 @@ function App() {
      */
     onSettled?: () => void;
   }) {
+    // Set once the wallet has the transaction: from then on an error we
+    // cannot classify may hide a move that went through.
+    let sent = false;
     try {
       if (demo && input.simulate) {
         settleStatus({ state: "submitted", message: "Working…" });
@@ -203,6 +206,7 @@ function App() {
           state: "awaiting-signature",
           message: "Confirm in your wallet…",
         });
+        sent = true;
         const digest = await signAndExecute(dAppKit, tx);
         settleStatus({ state: "submitted", message: "Sent. Updating…" });
         await waitForIndexed(digest);
@@ -212,15 +216,25 @@ function App() {
       settleStatus({ state: "done", message: input.doneMessage }, 9000);
     } catch (cause) {
       const failure = describeTxError(cause);
-      settleStatus({ state: "failed", message: failure.message });
-      // A chain failure or an unconfirmed result may still have changed the
-      // unit (or the unit changed under us): show what is really there.
-      if (failure.kind === "chain" || failure.kind === "unconfirmed") {
+      const unsure = failure.kind === "unconfirmed" || (sent && failure.kind === "other");
+      if (unsure) {
+        // It may have gone through: give the index a moment, show what is
+        // really in the unit, and drop the staging so one more click cannot
+        // send the same moves twice.
+        settleStatus({ state: "submitted", message: "Checking the unit…" });
+        await waitForIndexed("");
+        try {
+          await refetch({ fresh: true });
+        } catch {
+          // The regular poll catches up.
+        }
+        input.onSettled?.();
+      } else if (failure.kind === "chain") {
+        // A chain failure may still have changed the unit (or it changed
+        // under us): show what is really there.
         void refetch({ fresh: true });
       }
-      // An unconfirmed transaction may have gone through: drop the staging so
-      // one more click cannot send the same moves twice.
-      if (failure.kind === "unconfirmed") input.onSettled?.();
+      settleStatus({ state: "failed", message: failure.message });
     }
   }
 
