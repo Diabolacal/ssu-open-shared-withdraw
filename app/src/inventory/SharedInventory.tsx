@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { variantLabel } from "../chainKey";
 import type { ChainKey } from "../chainKey";
 import type { StatusState } from "../types";
 import { useTypeIcons } from "../typeIcons";
@@ -318,7 +319,9 @@ export function SharedInventory({
       {prompt && (
         <QuantityDialog
           title={promptTitle}
-          itemName={nameOf(prompt.typeId)}
+          itemName={[nameOf(prompt.typeId), variantLabel(prompt.typeId)]
+            .filter(Boolean)
+            .join(" · ")}
           max={prompt.max}
           waitForEnterRelease={prompt.viaKeyboard}
           onCancel={() => setPrompt(undefined)}

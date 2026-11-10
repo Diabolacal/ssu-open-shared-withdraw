@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent, ReactNode } from "react";
-import { baseTypeId } from "../chainKey";
+import { baseTypeId, variantLabel } from "../chainKey";
 import type { ChainKey } from "../chainKey";
 import { formatMaxM3, formatUsedM3 } from "./format";
 import { ItemTile } from "./ItemTile";
@@ -75,7 +75,8 @@ export function InventoryPanel({
       (tile) =>
         nameOf(tile.typeId).toLowerCase().includes(needle) ||
         String(baseTypeId(tile.typeId)).includes(needle) ||
-        tile.typeId.includes(needle),
+        tile.typeId.includes(needle) ||
+        (variantLabel(tile.typeId)?.toLowerCase().includes(needle) ?? false),
     );
   }, [tiles, search, nameOf]);
 

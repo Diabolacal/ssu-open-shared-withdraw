@@ -304,6 +304,30 @@ p {
   overflow-wrap: anywhere;
 }
 
+/* A variant stack keeps one line of name and shows the game's "Variant N"
+   underneath, so two stacks of one type can be told apart at a glance. The
+   tile stays the height of a two-line name. */
+.tile.has-variant .tile-name {
+  max-height: 17px;
+}
+
+.tile-variant {
+  max-width: 74px;
+  margin-top: 2px;
+  padding: 0 3px;
+  overflow: hidden;
+  color: var(--inv-text);
+  background: #000000;
+  font-size: 10px;
+  line-height: 14px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile.ghost .tile-variant {
+  color: var(--inv-dim);
+}
+
 .tile.movable {
   cursor: grab;
 }

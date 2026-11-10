@@ -131,9 +131,11 @@ without a variant keep their plain type id. Packed keys run past 2^53, where
 `Number()` rounds to a different item, so keys stay exact decimal strings
 from the inventory read to the transaction argument (`src/chainKey.ts`).
 Names and icons resolve by the base type, so variants of one type cost one
-lookup; each variant is still its own tile, with its variant number in the
-tooltip. Chain quantities are whole units: an amount below 1 is refused with
-a message before it reaches the contract, which aborts on 0.
+lookup; each variant is still its own tile, with a "Variant N" badge under
+its name (the game's own label for a variant stack) and in its tooltip. Since
+the 2026-11-10 patch many Stillness stacks carry a variant, old items such as
+Reinforced Alloys included. Chain quantities are whole units: an amount below
+1 is refused with a message before it reaches the contract, which aborts on 0.
 
 ### Wallet messages
 
@@ -226,8 +228,9 @@ third-party unit (read-only, foreign extension notice).
   requires the digest the dapp-kit reports inside `Transaction`).
 - The game's approval window: one take and one share go through, and one
   Reject shows "You declined the request in the game's approval window."
-- A variant item in a unit shows as its own tile under its base type's name
-  and icon, and takes with the exact key.
+- A take of a variant stack in game with this build. (Checked 2026-11-10
+  against a live unit: every variant stack reads with its base name, icon and
+  badge, and a built take carries the exact key.)
 - Dragging tiles between the two storage windows inside the in-game browser
   (pointer-event drag, verified in desktop Chrome; double-click is the
   fallback if a host swallows drags).

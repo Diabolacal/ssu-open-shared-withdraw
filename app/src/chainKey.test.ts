@@ -6,6 +6,7 @@ import {
   packChainKey,
   parseChainKey,
   variantId,
+  variantLabel,
 } from "./chainKey";
 import { parseBucket } from "./unitState";
 
@@ -64,6 +65,31 @@ describe("chain keys", () => {
     expect(parseChainKey("007")).toBe("7");
   });
 
+  // Real keys from a Stillness unit after the 2026-11-10 patch, with the base
+  // type and variant each one packs. Before the fix these rendered as "type N".
+  it.each([
+    ["133144064611", 78435, 31],
+    ["665720027587", 96707, 155],
+    ["1026497280448", 96704, 239],
+    ["1662152440263", 96711, 387],
+    ["1666447408844", 97996, 388],
+    ["1670742374854", 96710, 389],
+    ["1864015903175", 96711, 434],
+    ["1868310871756", 97996, 435],
+    ["1872605837766", 96710, 436],
+  ])("decodes live key %s to type %i, variant %i", (key, base, variant) => {
+    expect(parseChainKey(key)).toBe(key);
+    expect(baseTypeId(key)).toBe(base);
+    expect(variantId(key)).toBe(variant);
+    expect(variantLabel(key)).toBe(`Variant ${variant}`);
+    expect(packChainKey(base, variant)).toBe(key);
+  });
+
+  it("labels only variant stacks", () => {
+    expect(variantLabel("77800")).toBeUndefined();
+    expect(variantLabel(SMALL_VARIANT.toString())).toBe("Variant 5");
+  });
+
   it("orders keys numerically", () => {
     const keys = [BIG_VARIANT.toString(), "77800", SMALL_VARIANT.toString(), "9"];
     expect([...keys].sort(compareChainKeys)).toEqual([
@@ -100,6 +126,32 @@ describe("inventory read", () => {
     expect(bucket.entries.map((e) => e.quantity)).toEqual([409, 7, 2]);
     expect(bucket.usedCapacity).toBe(1000);
     expect(bucket.maxCapacity).toBe(20_000_000);
+  });
+
+  it("reads variant stacks exactly as Stillness returns them (2026-11-10)", () => {
+    // Shape and values copied from a live unit's main hangar after the patch.
+    const live = (key: string, quantity: number, volume: string) => ({
+      key,
+      value: { tenant: "stillness", type_id: key, item_id: "0", volume, quantity },
+    });
+    const bucket = parseBucket({
+      max_capacity: "20000000",
+      used_capacity: "874172",
+      items: {
+        contents: [
+          live("1662152440263", 152300, "0"),
+          live("1864015903175", 152300, "0"),
+          live("133144064611", 920, "2"),
+          live("77810", 6, "100"),
+        ],
+      },
+    })!;
+    expect(bucket.entries.map((e) => [e.typeId, e.quantity, e.volume])).toEqual([
+      ["77810", 6, 100],
+      ["133144064611", 920, 2],
+      ["1662152440263", 152300, 0],
+      ["1864015903175", 152300, 0],
+    ]);
   });
 
   it("falls back to the entry's type_id when the map key is missing", () => {

@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import type { KeyboardEvent, MouseEvent, PointerEvent } from "react";
-import { variantId } from "../chainKey";
+import { variantLabel } from "../chainKey";
 import { formatQuantity } from "./format";
 import type { TileModel } from "./moves";
 import type { ClickModifiers } from "./selection";
@@ -30,7 +30,8 @@ const DOUBLE_CLICK_MS = 400;
 /**
  * One inventory slot drawn like the game's storage windows: 64 px icon on a
  * square plate, black count badge in the bottom-right corner, name wrapped
- * underneath. Ghost tiles are staged arrivals not yet committed.
+ * underneath (one line plus a "Variant N" badge on a variant stack). Ghost
+ * tiles are staged arrivals not yet committed.
  */
 export function ItemTile({
   tile,
@@ -55,10 +56,11 @@ export function ItemTile({
     : tile.departing
       ? "All staged to leave"
       : tile.quantity.toLocaleString("en-US");
-  // Variants share a name and icon with their base type; the tooltip is
-  // what tells two such stacks apart.
-  const variant = variantId(tile.typeId);
-  const tooltip = [name, variant ? `Variant ${variant}` : undefined, status, movable ? moveHint : undefined]
+  // Variants share a name and icon with their base type; the badge under
+  // the name (and the tooltip) is what tells two such stacks apart.
+  const variant = variantLabel(tile.typeId);
+  if (variant) classes.push("has-variant");
+  const tooltip = [name, variant, status, movable ? moveHint : undefined]
     .filter(Boolean)
     .join("\n");
 
@@ -121,6 +123,7 @@ export function ItemTile({
         )}
       </div>
       <div className="tile-name">{name}</div>
+      {variant && <div className="tile-variant">{variant}</div>}
     </div>
   );
 }

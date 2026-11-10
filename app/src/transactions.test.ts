@@ -68,6 +68,23 @@ describe("buildMoveTx", () => {
     ]);
   });
 
+  it("keeps two live variants of one type apart in one transaction", () => {
+    // Olivine variants 387 and 434 from a Stillness unit (2026-11-10): same
+    // base type, same count, different items.
+    const tx = moveTx(
+      [
+        { typeId: "1662152440263", mainQuantity: 152300, openQuantity: 0 },
+        { typeId: "1864015903175", mainQuantity: 1, openQuantity: 0 },
+      ],
+      [{ typeId: "133144064611", quantity: 920 }],
+    );
+    expect(claimCalls(tx)).toEqual([
+      { fn: "take", key: "1662152440263", quantity: 152300 },
+      { fn: "take", key: "1864015903175", quantity: 1 },
+      { fn: "put", key: "133144064611", quantity: 920 },
+    ]);
+  });
+
   it.each([0, -1, 0.5, 1.5, Number.NaN])("refuses a take of %s units", (quantity) => {
     expect(() => moveTx([{ typeId: "77800", mainQuantity: quantity, openQuantity: 0 }])).toThrow(
       WHOLE_UNITS_TEXT,

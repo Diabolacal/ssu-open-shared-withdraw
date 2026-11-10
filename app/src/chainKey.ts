@@ -59,6 +59,15 @@ export function variantId(key: ChainKey): number {
   return Number(chainKeyToBigInt(key) >> ID_BITS);
 }
 
+/**
+ * The player-facing label for a variant stack, in the game's own words (the
+ * client labels one "variant <id>"), or undefined for a plain item.
+ */
+export function variantLabel(key: ChainKey): string | undefined {
+  const variant = variantId(key);
+  return variant ? `Variant ${variant}` : undefined;
+}
+
 /** Builds a key from its parts (tests and demo data). */
 export function packChainKey(typeId: number | bigint, variant: number | bigint = 0): ChainKey {
   const base = BigInt(typeId);

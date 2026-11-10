@@ -1,5 +1,5 @@
 import type { Bucket, InventoryEntry, UnitState } from "./unitState";
-import { compareChainKeys } from "./chainKey";
+import { compareChainKeys, packChainKey } from "./chainKey";
 import type { ChainKey } from "./chainKey";
 import { CLAIM_AUTH_PACKAGE_ID, CLAIM_MODULE } from "./config";
 
@@ -64,6 +64,12 @@ const store = {
     entry(77805, 1800, 10),
     entry(83892, 4, 100),
     entry(83894, 1, 100),
+    // Variant stacks, keyed (variant << 32) | type id as on chain: two
+    // Olivine variants with equal counts, as seen on a live unit.
+    entry(packChainKey(96711, 387), 152_300, 0),
+    entry(packChainKey(96711, 434), 152_300, 0),
+    entry(packChainKey(96704, 239), 42_800, 0),
+    entry(packChainKey(78435, 31), 920, 2),
   ],
   own: [
     entry(95343, 11, 100),
